@@ -1,0 +1,16 @@
+{
+	"ci-form": "Pages with forms",
+	"ci-forms-extension-description": "Forms with autovalidation, multiple choice questions and Cloze tests",
+	"ci-forms-submit": "Form submission",
+	"ci-forms-email-not-enabled": "This wiki is not enabled for sending email",
+	"ci-forms-recipient-not-found": "Recipient email not found",
+	"ci-forms-recipient-invalid": "Recipient email not valid",
+	"ci-forms-email-subject": "New submission of form \"$1\" at page \"$2\"",
+	"ci-forms-dispatch-error": "The form cannot be dispacted, please try again or contact <span class=\"ci_text_highlight\">$1</span>",
+	"ci-forms-dispatch-success": "Your form has been dispacted. Thank you!",
+	"ci-forms-google-recaptcha-secret-not-set": "Recaptcha secret not set",
+	"ci-forms-recaptcha-challenge-not-found": "Captcha challenge not found",
+	"ci-forms-recaptcha-error": "Recaptcha error ($1). Please try again or write at <span class=\"ci_text_highlight\">$2</span>",
+	"ci-forms-recaptcha-negative-score": "Negative score. Please write at <span class=\"ci_text_highlight\">$1</span> if your attempt is legitimate"
+}
+

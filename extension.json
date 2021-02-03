@@ -1,0 +1,48 @@
+{
+	"name": "CIForms",
+	"author": "thomas-topway-it",
+	"version": "1.0.0",
+	"url": "https://www.mediawiki.org/wiki/Extension:CIForms",
+	"descriptionmsg": "ci-forms-extension-description",
+	"license-name": "GPL-2.0-or-later",
+	"type": "parserhook",
+	"MessagesDirs": {
+		"CIForms": [
+			"i18n"
+		]
+	},
+	"AutoloadClasses": {
+		"CIForms": "includes/CIForms.php",
+		"CIFormsSubmit": "includes/specials/CIFormsSubmit.php"
+	},
+	"ExtensionMessagesFiles": {
+		"CIFormsMagic": "CIForms.i18n.php"
+	},
+	"Hooks": {
+		"ParserFirstCallInit": "CIForms::ParserFirstCallInit",
+		"BeforePageDisplay": "CIForms::BeforePageDisplay"
+	},
+	"ResourceFileModulePaths": {
+		"localBasePath": "",
+		"remoteExtPath": "CIForms"
+	},
+	"SpecialPages": {
+		"CIFormsSubmit": "CIFormsSubmit"
+	},
+	"ResourceModules": {
+		"ext.CIForms.validation": {
+			"localBasePath": "resources",
+			"scripts": [
+				"validation.js"
+			],
+			"dependencies": [
+				"jquery"
+			],
+			"styles": [
+				"style.css"
+			],
+			"targets": [ "desktop", "mobile" ]
+		}
+	},
+	"manifest_version": 1
+}
