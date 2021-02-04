@@ -175,7 +175,7 @@ function escapeHtml(text) {
 		var form_element = $(this);
 
 
-		$(this).find('.ci_cloze_test_questions').each(function() {
+		$(this).find('.ci_form_section_cloze_test_list').each(function() {
 				
 			var section = $(this).closest('.ci_form_section')
 
