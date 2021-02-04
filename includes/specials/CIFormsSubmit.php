@@ -133,7 +133,7 @@ class CIFormsSubmit extends SpecialPage {
 
 
 			if(!empty($form_result['form_values']['error-message'])) {
-				$error_message = $form_result['form_values']['error-message'];
+				$message = $form_result['form_values']['error-message'];
 				
 			} else if(!empty($wgCIFormsErrorMessage)) {
 				$message = $wgCIFormsErrorMessage;

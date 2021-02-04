@@ -135,21 +135,19 @@ class CIForms {
 		}
 
 
-		$output .= '<div class="ci_form_sections_container' . (sizeof($lines) ? ' multiple_sections' : '') . '">';
-
 
 		if($section_lines) {
 			$output .= self::ci_form_section_process($section_lines);
 		}
 
 
-		if(sizeof($lines)) {
+		if($lines) {
 			$output .= implode($lines);
 		}
 
 
 
-		$output .= '</div>';
+
 
 		$output .= '<div class="ci_form_section_submit">';
 
@@ -279,6 +277,7 @@ class CIForms {
 
 				default: 
 					$required = ' data-required="1"';
+				
 
 
 			}
@@ -320,6 +319,67 @@ class CIForms {
 	}
 
 
+	private static function ci_form_section_replace_line($named_parameters,$value,$unique_id,$n,$label = null) {
+		
+
+		$i = 0;
+
+		$required = false;
+
+
+		switch($named_parameters['type']) {
+
+			case 'inputs': 
+				
+				$input = self::ci_form_section_replace_input($named_parameters,$value,$unique_id,$n,$required);
+
+
+				if($label) {
+					
+					return 
+						'<td class="ci_form_section_table_cell_left">' 
+						. '<input type="hidden" name="' . $unique_id . '_items_' . $n . '_label" value="' . htmlspecialchars($value) . '" />'
+						. $label . ($required ? ' *' : '')
+						. '<td class="ci_form_section_table_cell_right">'
+						. $input
+						. '</td>';
+
+				} else {
+
+					return 
+						'<input type="hidden" name="' . $unique_id . '_items_' . $n . '_label" value="' . htmlspecialchars($value) . '" />'
+						. $input;
+					
+				}
+
+			break;
+			
+		
+			case 'multiple choice' :
+
+				// native validation, see the following:
+
+				// https://stackoverflow.com/questions/8287779/how-to-use-the-required-attribute-with-a-radio-input-field
+				// https://stackoverflow.com/questions/6218494/using-the-html5-required-attribute-for-a-group-of-checkboxes
+	
+				return 
+
+				($named_parameters['max answers'] > 1 && $n == 0 ? '<input id="radio-for-checkboxes" type="radio" name="radio-for-required-checkboxes" required/>' : '') 
+
+					. '<input type="hidden" name="' . $unique_id . '_items_' . $n . '_label" value="' . htmlspecialchars($value) . '" />'
+					. '<input name="' . $unique_id . '_items_' . ($named_parameters['max answers'] > 1 ? $n . '_' : '') . 'value" type="' . ($named_parameters['max answers'] == 1 ? 'radio' : 'checkbox') .'" value="' . $n . '"' . ($named_parameters['max answers'] == 1 ? ' required' : '') . ' />'
+
+					. self::ci_form_section_replace_input($named_parameters,$value,$unique_id,$n,$required,true);
+
+			break;
+
+
+		}
+		
+
+	}
+
+
 
 
 	protected static function ci_form_section_process($argv) {
@@ -344,39 +404,9 @@ class CIForms {
 
 		$unique_id = uniqid();
 
-
-
-		switch($named_parameters['type']) {
-
-			case 'inputs' :
-
-				$labels = [];
-
-				// *** todo
-				// format table with colspan if necessary
-				foreach($lines as $value) {	
-					$labels[] = trim(preg_replace('/\[.*?\]\s*\*?/','',$value));					
-				}
-
-				$table_layout = false;
-
-			
-				foreach($labels as $value) {
-					if(!empty($value)) {
-						$table_layout = true;
-						break;
-					}
-				}
-
-				$table_layout_class = ($table_layout ? 'table' : 'rows');
-
-			break;
-
-		}
-
 		
 
-		$output .= '<div class="ci_form_section ' . htmlspecialchars(str_replace(' ','_',$named_parameters['type'])) . (!empty($table_layout_class) ? " $table_layout_class" : '') . '" data-id="' . $unique_id . '">';
+		$output .= '<div class="ci_form_section ' . htmlspecialchars(str_replace(' ','_',$named_parameters['type'])) . '" data-id="' . $unique_id . '">';
 
 	
 
@@ -458,38 +488,57 @@ class CIForms {
 
 			case 'inputs' :
 
-	
+				$labels = [];
 
+				// *** todo
+				// format table with colspan if necessary
+				foreach($lines as $value) {	
+					$labels[] = trim(preg_replace('/\[.*?\]\s*\*?/','',$value));					
+				}
+
+				$one_label_is_defined = false;
+
+			
+				foreach($labels as $value) {
+					if($value) {
+						$one_label_is_defined = true;
+						break;
+					}
+				}
+
+
+
+				if($one_label_is_defined) {
+					$output .= '<table class="ci_form_section_table">';
+				}
 
 				$n = 0;
 
 				foreach($lines as $value) {	
 
-					$output .= '<div class="ci_form_section_inputs_row">';
-
-					$required = false;
-
-					$input = self::ci_form_section_replace_input($named_parameters,$value,$unique_id,$n,$required);
-
-					if($table_layout) {		
-						$output .= '<div class="ci_form_section_inputs_col-25">';
-						$output .= '<label>' . $labels[$n] . ($required ? ' *' : '') . '</label>';
-						$output .= '</div>';
-						$output .= '<div class="ci_form_section_inputs_col-75">';
+					if($one_label_is_defined) {
+						$output .= '<tr class="ci_form_section_table_row">';
 
 					} else {
-						$output .= '<div class="ci_form_section_inputs_col">';
+						$output .= '<div class="ci_form_section_row">';
 					}
 
-						
-					$output .= $input;
-					$output .= '</div>';
-					$output .= '</div>';
- 
+					$output .= self::ci_form_section_replace_line($named_parameters,$value,$unique_id,$n,$labels[$n]);
 					
+					if($one_label_is_defined) {
+						$output .= '</tr>';
+
+					} else {
+						$output .= '</div>';
+					}
+
 					$n++;
 				}
 
+
+				if($one_label_is_defined) {
+					$output .= '</table>';
+				}
 
 
 			break;
@@ -502,33 +551,18 @@ class CIForms {
 
 
 				if(!$list_type_ordered) {
-					$output .= '<ul class="ci_form_section_multiple_choice_list" style="list-style:' . $list_style . '">';
+					$output .= '<ul class="ci_form_section_list" style="list-style:' . $list_style . '">';
 
 				} else {
-					$output .= '<ol class="ci_form_section_multiple_choice_list" style="list-style-type:' . $list_style . '">';
+					$output .= '<ol class="ci_form_section_list" style="list-style-type:' . $list_style . '">';
 				}
 
 
 				$n = 0;
 	
 				foreach($lines as $key => $value) {
-					$output .= '<li>';
-
-					// native validation, see the following:
-
-					// https://stackoverflow.com/questions/8287779/how-to-use-the-required-attribute-with-a-radio-input-field
-					// https://stackoverflow.com/questions/6218494/using-the-html5-required-attribute-for-a-group-of-checkboxes
-	
-					$output .= ($named_parameters['max answers'] > 1 && $n == 0 ? '<input id="radio-for-checkboxes" type="radio" name="radio-for-required-checkboxes" required/>' : '');
-
-					$output .= '<input type="hidden" name="' . $unique_id . '_items_' . $n . '_label" value="' . htmlspecialchars($value) . '" />';
-					$output .= '<input name="' . $unique_id . '_items_' . ($named_parameters['max answers'] > 1 ? $n . '_' : '') . 'value" type="' . ($named_parameters['max answers'] == 1 ? 'radio' : 'checkbox') .'" value="' . $n . '"' . ($named_parameters['max answers'] == 1 ? ' required' : '') . ' />';
-
-					$output .= self::ci_form_section_replace_input($named_parameters,$value,$unique_id,$n,$required,true);
-
-					$output .=  '</li>';
+					$output .= '<li>' . self::ci_form_section_replace_line($named_parameters,$value,$unique_id,$n) . '</li>';
 					$n++;
-
 				}
 
 				
@@ -643,7 +677,7 @@ class CIForms {
 				
 					foreach($suggestions as $word) {
 
-						$output .= '<span class="ci_form_section_cloze_test_suggestions_word' . (in_array($word,$answers) ? '_answered' : '') . '">';
+						$output .= '<span class="ci_cloze_test_suggestions_word' . (in_array($word,$answers) ? '_answered' : '') . '">';
 						$output .= $word;
 						$output .= '</span>';
 
@@ -660,7 +694,7 @@ class CIForms {
 
 
 
-				$output .= '<ol class="ci_form_section_cloze_test_list">';
+				$output .= '<ol class="ci_cloze_test_questions">';
 
 				$n = 0;
 				
@@ -671,23 +705,24 @@ class CIForms {
 					$replacement = '';
 
 					if($has_inline_suggestions) {
-						$replacement .= '<span class="ci_form_section_cloze_test_section_list_question_suggestion">(' . $inline_suggestion . ')</span> ';
+						$replacement .= '<span class="ci_cloze_test_questions_question_suggestion">(' . $inline_suggestion . ')</span> ';
 					}
+
 
 
 					$replacement .= '<input type="hidden" name="' . $unique_id . '_items_' . $n . '_label" value="' . htmlspecialchars(($example ? '* ' : '') . $label) . '" />';
 
 
 					if($example) {
-						$replacement .= '<span class="ci_form_section_cloze_test_list_question_answered">' . ($inline_answer ? $inline_answer : $inline_suggestion) . '</span>';
+						$replacement .= '<span class="ci_cloze_test_questions_question_answered">' . ($inline_answer ? $inline_answer : $inline_suggestion) . '</span>';
 
 					} else {
-						$replacement .= '<input name="' . $unique_id . '_items_' . $n . '_value" class="ci_cloze_test_section_list_question_blank" data-required="1" type="text" />';
+						$replacement .= '<input name="' . $unique_id . '_items_' . $n . '_value" class="ci_cloze_test_questions_question_blank" data-required="1" type="text" />';
 					}
 
 			
 
-					$output .= '<li class="ci_form_section_cloze_test_list_question' . ($example ? '_example' : '') . '">';
+					$output .= '<li class="ci_cloze_test_questions_question' . ($example ? '_example' : '') . '">';
 					$output .= preg_replace('/\[.*?\]/', $replacement, $label);
 					$output .= '</li>';
 
