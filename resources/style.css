@@ -10,33 +10,24 @@
 }
 
 
-.ci_form_section_inputs_col-25 label {
+.ci_form_section_inputs_row label {
 	display: inline-block;
+	padding: 4px 0;
 }
 
 
 .ci_form_section_inputs_col-25 {
 	float: left;
-	/* width: 25%; */
-	width: 100%;
+	width: 25%;
 	margin-top: 6px;
 }
 
-
-.ci_form_sections_container.multiple_sections .ci_form_section_inputs_col-25 {
-	width: 25%;
-}
 
 
 .ci_form_section_inputs_col-75 {
 	float: left;
-	/* width: 75%; */
-	width: 100%;
-	margin-top: 6px;
-}
-
-.ci_form_sections_container.multiple_sections .ci_form_section_inputs_col-75 {
 	width: 75%;
+	margin-top: 6px;
 }
 
 
@@ -60,13 +51,6 @@
   .ci_form_section_inputs_col-25, .ci_form_section_inputs_col-75, input[type=submit] {
     width: 100%;
     margin-top: 0;
-  }
-
-
-  .ci_form_section_inputs_row input {
-	outline: none;
-	border: none;
-	border-bottom: 1px dotted #000;
   }
 
 }
@@ -94,7 +78,7 @@
 }
 
 
-.ci_form_sections_container.multiple_sections .ci_form_section_inputs_row input, .ci_form_section_inputs_row select, .ci_form_section_inputs_row textarea {
+.ci_form_section.inputs_responsive .ci_form_section_inputs_row input, .ci_form_section.inputs_responsive .ci_form_section_inputs_row select, .ci_form_section.inputs_responsive .ci_form_section_inputs_row textarea {
     border-radius: 2px;
 	padding: 4px;
     width: auto;	
@@ -102,8 +86,8 @@
 }
 
 
-.ci_form_sections_container.multiple_sections .ci_form_section_inputs_row {
-	margin-bottom: 6px;
+.ci_form_section.inputs_responsive .ci_form_section_inputs_row {
+	margin-bottom: 2px;
 }
 
 .ci_form_section_inputs_row textarea {

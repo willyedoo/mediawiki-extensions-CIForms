@@ -348,7 +348,38 @@ class CIForms {
 
 
 
-		$output .= '<div class="ci_form_section ' . htmlspecialchars(str_replace(' ','_',$named_parameters['type'])) . '" data-id="' . $unique_id . '">';
+		switch($named_parameters['type']) {
+
+			case 'inputs' :
+			case 'inputs responsive' :
+
+				$labels = [];
+
+				// *** todo
+				// format table with colspan if necessary
+				foreach($lines as $value) {	
+					$labels[] = trim(preg_replace('/\[.*?\]\s*\*?/','',$value));					
+				}
+
+				$table_layout = false;
+
+			
+				foreach($labels as $value) {
+					if(!empty($value)) {
+						$table_layout = true;
+						break;
+					}
+				}
+
+				$table_layout_class = ($table_layout ? 'table' : 'rows');
+
+			break;
+
+		}
+
+		
+
+		$output .= '<div class="ci_form_section ' . htmlspecialchars(str_replace(' ','_',$named_parameters['type'])) . (!empty($table_layout_class) ? " $table_layout_class" : '') . '" data-id="' . $unique_id . '">';
 
 	
 
@@ -432,12 +463,9 @@ class CIForms {
 			case 'inputs' :
 			case 'inputs responsive' :
 
-
 				$n = 0;
 
 				foreach($lines as $value) {	
-
-					$label = trim(preg_replace('/\[.*?\]\s*\*?/','',$value));
 
 					$output .= '<div class="ci_form_section_inputs_row">';
 
@@ -448,8 +476,8 @@ class CIForms {
 					$output .= '<div class="ci_form_section_inputs_col' . ($named_parameters['type'] == 'inputs responsive' ? '-25' : '') . '">';
 					
 			
-					if(!empty($label)) {
-						$output .= '<label>' . $label . ($required ? ' *' : '') . '</label>';
+					if(!empty($labels[$n])) {
+						$output .= '<label>' . $labels[$n] . ($required ? ' *' : '') . '</label>';
 					}
 
 
