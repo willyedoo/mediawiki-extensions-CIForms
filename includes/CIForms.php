@@ -200,11 +200,11 @@ class CIForms {
 
 		$output .= '</div>';
 	
+		$output .= '<div class="ci_form_section_captcha">';
 		if(self::CaptchaEnabled()) {
-			$output .= '<div class="ci_form_section_captcha">';
 			$output .= 'form protected using <a target="_blank" style="color:silver;text-decoration:" href="https://www.google.com/recaptcha/about/">Google recaptcha</a>';
-			$output .= '</div>';
 		}
+		$output .= '</div>';	
 
 		$output .= '</form>';
 
