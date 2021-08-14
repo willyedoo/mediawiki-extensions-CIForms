@@ -1,6 +1,5 @@
 <?php
 
-
 /**
  * This file is part of the MediaWiki extension CIForms.
  *
@@ -23,159 +22,196 @@
  * @copyright Copyright © 2021, https://culturaitaliana.org
  */
 
+use Dompdf\Dompdf;
+use PHPMailer\PHPMailer\PHPMailer;
 
-class CIFormsSubmit extends SpecialPage {
+include_once dirname(__FILE__, 3) . '/vendor/autoload.php';
 
-	public function __construct() {
+class CIFormsSubmit extends SpecialPage
+{
+	public function __construct()
+	{
 		// not list in the special pages index
 		$listed = false;
-		parent::__construct( 'ci-forms-submit', '', $listed );
+		parent::__construct('ci-forms-submit', '', $listed);
 	}
 
-
-
-
-	public function execute( $par ) {
-
-
+	public function execute($par)
+	{
 		$request = $this->getRequest();
-
 
 		$this->setHeaders();
 		$this->outputHeader();
-
 
 		$out = $this->getOutput();
 
 
 		//$out->addModuleStyles( 'ext.CIForms.validation' );
 
-
 		global $wgResourceBasePath;
 		$css = '<link rel="stylesheet" href="' . $wgResourceBasePath . '/extensions/CIForms/resources/style.css" />';
 
-		$out->addHeadItem('ci_forms_css', $css );
-
+		$out->addHeadItem('ci_forms_css', $css);
 
 		$post = $_POST;	//$request->getArray( 'data' );
-//print_r($post);
-
 
 		global $wgEnableEmail;
 		global $wgCIFormsSenderEmail;
 
-
-		if(!$wgEnableEmail) {
-			return $this->exit($out,$this->msg( 'ci-forms-email-not-enabled'));
+		if (!$wgEnableEmail) {
+			return $this->exit($out, $this->msg('ci-forms-email-not-enabled'));
 		}
 
+		if (\CIForms::CaptchaEnabled()) {
+			list($result, $message, $captcha_message) = $this->check_captcha($post) + [null, null, null];
 
-
-
-		list($result,$message,$captcha_message) = $this->check_captcha($post) + [null,null,null];
-
-
-
-		if($result === false) {
-			return $this->exit($out,$this->msg( $message, $captcha_message,$wgCIFormsSenderEmail));
+			if ($result === false) {
+				return $this->exit($out, $this->msg($message, $captcha_message, $wgCIFormsSenderEmail));
+			}
 		}
 
-
-		
 		$form_result = $this->parseForm($post);
-
 
 		global $wgCIFormsSubmitEmail;
 
-		//print_r($form_result);
+		$submit = [];
 
-		$submit = null;
-
-		if(!empty($form_result['form_values']['submit'])) {
-			$submit = $form_result['form_values']['submit'];
-
-		} else if(!empty($wgCIFormsSubmitEmail)) {
-			$submit = $wgCIFormsSubmitEmail;
+		if (!empty($form_result['form_values']['submit'])) {
+			$submit = explode(',', $form_result['form_values']['submit']);
+		} else if (!empty($wgCIFormsSubmitEmail)) {
+			$submit = explode(',', $wgCIFormsSubmitEmail);
 		}
 
-
-		if(empty($submit)) {
-			return $this->exit($out,$this->msg( 'ci-forms-recipient-not-found'));
+		if (empty($submit)) {
+			return $this->exit($out, $this->msg('ci-forms-recipient-not-found'));
 		}
 
-		if(!Sanitizer::validateEmail($submit)) {
-			return $this->exit($out,$this->msg( 'ci-forms-recipient-invalid'));
+		$submit_valid = [];
+
+		foreach ($submit as $email) {
+			if (Sanitizer::validateEmail($email)) {
+				$submit_valid[] = $email;
+			}
 		}
 
+		if (!sizeof($submit_valid)) {
+			return $this->exit($out, $this->msg('ci-forms-recipient-invalid'));
+		}
+
+		$subject = $this->msg('ci-forms-email-subject', $form_result['form_values']['title']);
+
+		$message_body = $this->msg('ci-forms-email-content', $form_result['form_values']['title'], $form_result['form_values']['pagename']);
+
+		$protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' || $_SERVER['SERVER_PORT'] == 443) ? "https://" : "http://";
+
+		$css_url = $protocol . $_SERVER['HTTP_HOST'] . $wgResourceBasePath . '/extensions/CIForms/resources/style.css';
+
+		global $wgResourceBasePath;
+
+		$form_output_html = '';
+		$form_output_html .= '<html><head>';
+		$form_output_html .= '<meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>';
+
+		//$form_output_html .= '<link rel="stylesheet" type="text/css" href="' . $css_url . '" />';
+
+		$form_output_html .= '<style>';
+		$form_output_html .= file_get_contents($css_url);
+		$form_output_html .= '</style>';
+
+		$form_output_html .= '<head><body>';
+
+		$form_output_html .= $this->create_output($form_result['form_values'], $form_result['sections']);
+
+		$form_output_html .= '<br><br><br><br><br>';
+		$form_output_html .= $this->msg('ci-forms-credits');
+		$form_output_html .= '</body></html>';
+
+
+
+		// create pdf
+		// https://github.com/dompdf/dompdf
 		
-		$table = $this->create_table($form_result['form_values'],$form_result['sections']);
 
-		//echo $table;
+		// instantiate and use the dompdf class
+		$dompdf = new Dompdf();
+		$dompdf->loadHtml($form_output_html);
+
+		// (Optional) Setup the paper size and orientation
+		$dompdf->setPaper('A4');
+
+		// Render the HTML as PDF
+		$dompdf->render();
+
+		// Output the generated PDF to Browser
+		//$dompdf->stream();
+
+		$attachment = $dompdf->output();
 
 
-		$subject = $this->msg( 'ci-forms-email-subject',$form_result['form_values']['title'],$form_result['form_values']['pagename']);
-
-		$from = new MailAddress( $wgCIFormsSenderEmail );
-
-		$to = new MailAddress( $submit );
 
 
-		$status = UserMailer::send( $to, $from, $subject, $table);
+		// https://github.com/PHPMailer/PHPMailer/blob/master/examples/sendmail.phps
 
+		//Create a new PHPMailer instance
+		$mail = new PHPMailer();
 
+		//Set PHPMailer to use the sendmail transport
+		$mail->isSendmail();
+
+		$mail->setFrom($wgCIFormsSenderEmail);
+
+		foreach ($submit_valid as $key => $email) {
+			$mail->addAddress($email);
+		}
+
+		$mail->Subject = $subject;
+
+		$mail->msgHTML($message_body);
+
+		$mail->AltBody = $message_body;
+		
+		//$mail->addAttachment($attachment);
+		// ,$encoding,$type
+		$mail->AddStringAttachment($attachment, $subject, "base64", "application/pdf");
+
+		$result_success = $mail->send();
+
+		// echo $mail->ErrorInfo;
 
 		$message = null;
 
-
-		if(!is_object( $status ) || !$status->ok ) {
-
+		if (!$result_success) {
 			global $wgCIFormsErrorMessage;
 
-
-			if(!empty($form_result['form_values']['error-message'])) {
+			if (!empty($form_result['form_values']['error-message'])) {
 				$message = $form_result['form_values']['error-message'];
-				
-			} else if(!empty($wgCIFormsErrorMessage)) {
+			} else if (!empty($wgCIFormsErrorMessage)) {
 				$message = $wgCIFormsErrorMessage;
-			
 			} else {
-				$message = $this->msg( 'ci-forms-dispatch-error', $wgCIFormsSenderEmail);
+				$message = $this->msg('ci-forms-dispatch-error', $wgCIFormsSenderEmail);
 			}
-
-
 		} else {
-
 			global $wgCIFormsSuccessMessage;
 
-			if(!empty($form_result['form_values']['success-message'])) {
+			if (!empty($form_result['form_values']['success-message'])) {
 				$message = $form_result['form_values']['success-message'];
-				
-			} else if(!empty($wgCIFormsSuccessMessage)) {
+			} else if (!empty($wgCIFormsSuccessMessage)) {
 				$message = $wgCIFormsSuccessMessage;
-			
 			} else {
-				$message = $this->msg( 'ci-forms-dispatch-success');
+				$message = $this->msg('ci-forms-dispatch-success');
 			}
-
 		}
 
-
-		return $this->exit($out,$message);
-
-
+		return $this->exit($out, $message);
 	}
 
-
-
-	protected function exit($out,$message) {
+	protected function exit($out, $message) {
 		$html = '<p>' . $message . '</p>';
 		$out->addHTML($html);
 	}
 
-
-
-	protected function create_table($form_values,$sections) {
-
+	protected function create_output($form_values, $sections)
+	{
 		$ordered_styles = [
 			'decimal',
 			'decimal-leading-zero',
@@ -190,207 +226,203 @@ class CIFormsSubmit extends SpecialPage {
 			'upper-alpha'
 		];
 
-
-
 		$output = '';
 
+		$output .= '<div class="ci_form" style="max-width:none;background:none">';
+		$output .= '<div class="ci_form_container">';
 
-		$output .= '<div class="ci_form_table">';
+		if (!empty($form_values['title'])) {
+			$output .= '<div class="ci_form_title">';
+			$output .= $form_values['title'];
+			$output .= '</div>';
+		}
 
+		$output .= '<div class="ci_form_sections_container' . (sizeof($sections) > 1 ? ' multiple_sections' : '') . '">';
 
-		
-		foreach($sections as $key => $section) {
-	 
+		foreach ($sections as $key => $section) {
+			$output .= '<div class="ci_form_section ' . htmlspecialchars(str_replace(' ', '_', $section['type'])) . '">';
 
-			$output .= '<div class="ci_form_section">';
-
-
-			if(!empty($section['title'])) {
+			if (!empty($section['title'])) {
 				$output .= '<div class="ci_form_section_title">';
-				$output .= section['title'];
+				$output .= $section['title'];
 				$output .= '</div>';
 			}
 
+			switch ($section['type']) {
+				case 'inputs':
+				case 'inputs responsive':
 
-			switch($section['type']) {
+					// *** todo, make uniform to the ci_form_section_process
+					// to allow multiple inputs on the same row
 
-				case 'inputs' :
+					foreach ($section['items'] as $value) {
+						$required = false;
+						$placeholder = null;
 
-					$output .= '<table class="ci_form_section_table"">';
- 
-	
-					foreach($section['items'] as $value) {
+						$label = trim(
+							preg_replace_callback(
+								'/\[\s*([^\[\]]*)\s*\]\s*(\*)?/',
+								function($matches) use (&$required, &$placeholder) {
+									$required = !empty($matches[2]);
 
-						$label = trim(preg_replace('/\[\s*(.*?)\s*\]\s*\*?/','',$value['label']));
+									list($input_type, $placeholder) = CIForms::ci_form_parse_input_symbol($matches[1]);
 
-						$output .= '<tr class="ci_form_section_table_row">';
-						$output .= '<th class="ci_form_section_table_cell_left">' . $label . '</th>';
-						$output .= '<td class="ci_form_section_table_cell_right">';
-						$output .= '<input disabled="disabled" type="text" value="' . htmlspecialchars($value['value']) . '" />';
-						$output .= '</td></tr>';
-	
+									return '';
+								},
+								$value['label']
+							)
+						);
+
+						if (empty($label)) {
+							$label = $placeholder;
+						}
+
+						$output .= '<div class="ci_form_section_inputs_row">';
+
+						$output .= '<div class="ci_form_section_inputs_col' . ($section['type'] == 'inputs responsive' ? '-25' : '') . '">';
+
+						if (!empty($label)) {
+							$output .= '<label>' . $label . ($required ? ' *' : '') . '</label>';
+						}
+
+						if ($section['type'] == 'inputs responsive') {
+							$output .= '</div>';
+							$output .= '<div class="ci_form_section_inputs_col-75">';
+						}
+
+
+						//$output .= '<input disabled="disabled" type="text" value="' . htmlspecialchars($value['value']) . '" />';
+						$output .= '<span class="input">' . htmlspecialchars($value['inputs'][0]) . '</span>';
+						$output .= '</div>';
+
+						$output .= '</div>';
 					}
-		
-					$output .= '</table>';
 
+					break;
 
-				break;
+				case 'multiple choice':
+					$list_type_ordered = in_array($section['list-style'], $ordered_styles);
 
-
-				case 'multiple choice' :
-
-					$list_type_ordered = in_array($section['multiple-choice-list-style'],$ordered_styles);
-
-
-					if(!$list_type_ordered) {
-						$output .= '<ul class="ci_form_section_list" style="list-style:' . $section['multiple-choice-list-style'] . '">';
-
+					if (!$list_type_ordered) {
+						$output .= '<ul class="ci_form_section_multiple_choice_list" style="list-style:' . $section['list-style'] . '">';
 					} else {
-						$output .= '<ol class="ci_form_section_list" style="list-style-type:' . $section['multiple-choice-list-style'] . '">';
+						$output .= '<ol class="ci_form_section_multiple_choice_list" style="list-style-type:' . $section['list-style'] . '">';
 					}
 
-
-	
-					foreach($section['items'] as $value) {
-					
+					foreach ($section['items'] as $value) {
 						$label = $value['label'];
-				
+
 						$ii = -1;
 
 						$output .= '<li>';
 
-						$output .= '<input disabled="disabled" ' . ($value['value'] ? 'checked="checked" ' : '') . 'type="' . ($section['multiple-choice-max-answers'] == 1 ? 'radio' : 'checkbox') . '" />';
-		
+						// *** see here https://stackoverflow.com/questions/35200674/special-character-not-showing-in-html2pdf
+						$output .= '<span style="font-family:DejaVu Sans">' . ($value['selected'] ? '&#9745;' : '&#9744;') . '</span>&nbsp;';
 
-						$label = preg_replace_callback('/\[\s*\]\s*\*?/', function($matches) use ($value,&$ii) {
-							$ii++;
-							return '<input disabled="disabled" type="text" value="' . htmlspecialchars($value['inputs'][$ii]) . '" />';
-						},$label);
-
+						$label = preg_replace_callback(
+							'/\[([^\[\]]*)\]\s*\*?/',
+							function($matches) use ($value, &$ii) {
+								$ii++;
+								return '<span class="input">' . htmlspecialchars($value['inputs'][$ii]) . '</span>';
+							},
+							$label
+						);
 
 						$output .= $label;
 
-						$output .= '</li>';				
-	 
+						$output .= '</li>';
 					}
-
 
 					$output .= ($list_type_ordered ? '</ol>' : '</ul>');
 
-				break;
+					break;
 
+				case 'cloze test':
+					$output .= '<ol class="ci_form_section_cloze_test_list">';
 
-
-				case 'cloze test' :
-
-					$output .= '<ol class="ci_cloze_test_questions">';
-
-
-					foreach($section['items'] as $value) {
-
+					foreach ($section['items'] as $value) {
 						$label = trim($value['label']);
 
 						$example = ($label[0] == '*');
 
-						if($example) {
-							$label = trim(substr($label,1));
+						if ($example) {
+							$label = trim(substr($label, 1));
 						}
 
-						
+						$output .= '<li class="ci_form_section_cloze_test_list_question' . ($example ? '_example' : '') . '">';
 
-						$output .= '<li class="ci_cloze_test_questions_question' . ($example ? '_example' : '') . '">';
-						
+						$i = 0;
 
-						$output .= preg_replace_callback('/\[\s*(.*?)\s*\]\s*\*?/', function($matches) use ($value,$section,$example,&$ii) {
-					
-							$inline_suggestion = null;
-							$inline_answer = null;
+						$output .= preg_replace_callback(
+							'/\[\s*([^\[\]]*)\s*\]\s*\*?/',
+							function($matches) use (&$i, $value, $section, $example) {
+								$inline_suggestion = null;
+								$inline_answer = null;
 
-							if(!empty($matches[1])) {
+								if (!empty($matches[1])) {
+									$inline_suggestion = strtolower($matches[1]);
 
-								$inline_suggestion = strtolower($matches[1]);
+									if ($inline_suggestion) {
+										preg_match('/^\s*(.+?)\s*=\s*(.+?)\s*$/', $inline_suggestion, $match_);
 
-								if($example) {
+										if (!empty($match_[1])) {
+											$inline_suggestion = strtolower($match_[1]);
 
-									$match_ = preg_match('/^\s*(.+?)\s*=\s*(.+?)\s*$/',$inline_suggestion,$match);
-
-									if(!empty($match_[1])) {
-										$inline_suggestion = strtolower($match_[1]);
-					
-										if(!empty($match_[2])) {
-											$inline_answer = strtolower($match_[2]);
+											if (!empty($match_[2])) {
+												$inline_answer = strtolower($match_[2]);
+											}
 										}
-
 									}
-
 								}
 
-							}
+								$replacement_inner = '';
 
+								if ($inline_suggestion) {
+									$replacement_inner .= '<span class="ci_form_section_cloze_test_section_list_question_suggestion">(' . $inline_suggestion . ')</span> ';
+								}
 
+								if ($example) {
+									$replacement_inner .= '<span class="ci_form_section_cloze_test_list_question_answered">' . ($inline_answer ? $inline_answer : $inline_suggestion) . '</span> ';
+								} else {
+									$replacement_inner .= '<span class="input">' . htmlspecialchars($value['inputs'][$i]) . '</span>';
+								}
 
-							$replacement_inner = '';
+								$i++;
 
-							if($section['cloze-test-suggestions-type'] == 'inline') {
-								$replacement_inner .= '<span class="ci_cloze_test_questions_question_suggestion">(' . $inline_suggestion . ')</span> ';
-							}
-
-
-							if($example) {
-								$replacement_inner .= '<span class="ci_cloze_test_questions_question_answered">' . ($inline_answer ? $inline_answer : $inline_suggestion) . '</span> ';
-
-							} else {
-		 						$replacement_inner .= '<input type="text" disabled="disabled" value="' . htmlspecialchars($value['value']) . '" />';
-							}
-
-
-							return $replacement_inner;
-	
-						},$label);
-
+								return $replacement_inner;
+							},
+							$label
+						);
 
 						$output .= '</li>';
-						
-
 					}
 
-
 					$output .= '</ol>';
-					
-				break;
 
+					break;
 			}
 
-
 			$output .= '</div>';
-
 		}
-
 
 		$output .= '</div>';
-
+		$output .= '</div>';
+		$output .= '</div>';
 
 		return $output;
-
 	}
 
-
-
-
-	protected function check_captcha($post) {
-		
+	protected function check_captcha($post)
+	{
 		global $wgCIFormsGoogleRecaptchaSecret;
 
-
 		if (empty($wgCIFormsGoogleRecaptchaSecret)) {
-			return [false,'ci-forms-google-recaptcha-secret-not-set'];
+			return [false, 'ci-forms-google-recaptcha-secret-not-set'];
 		}
-
 
 		if (empty($post['g-recaptcha-response'])) {
-			return [false,'ci-forms-recaptcha-challenge-not-found'];
+			return [false, 'ci-forms-recaptcha-challenge-not-found'];
 		}
-
 
 		$captcha = $post['g-recaptcha-response'];
 
@@ -401,131 +433,102 @@ class CIFormsSubmit extends SpecialPage {
 
 
 		// use json_decode to extract json response
-		$response = json_decode($response,true);
+		$response = json_decode($response, true);
 
 		if ($response['success'] === false) {
-			return [false,'ci-forms-recaptcha-error',@$response['error-codes'][0]];
+			return [false, 'ci-forms-recaptcha-error', @$response['error-codes'][0]];
 		}
-
-
-
-		//... The Captcha is valid you can continue with the rest of your code
-		//... Add code to filter access using $response . score
 
 		if ($response['success'] == true && $response['score'] <= 0.5) {
-			return [false,'ci-forms-recaptcha-negative-score'];
+			return [false, 'ci-forms-recaptcha-negative-score'];
 		}
 
-
 		return [true];
-
 	}
 
-
-
-
-	protected function parseForm($post) {
+	protected function parseForm($post)
+	{
 
 		$props = [];
 		$labels = [];
 		$values = [];
 		$inputs = [];
 
-
 		$form_values = [];
 
 		$exclude = ['form', 'g-recaptcha-response', 'radio-for-required-checkboxes'];
 
-		foreach($post as $i => $value) {
-
+		foreach ($post as $i => $value) {
 			$value = trim($value);
 
-			list($section, $a, $b, $c, $d) = explode('_',$i) + [null,null,null,null,null];
+			list($section, $a, $b, $c, $d) = explode('_', $i) + [null, null, null, null, null];
 
-			if(in_array($section,$exclude)) {
-				if($section == 'form') {
+			if (in_array($section, $exclude)) {
+				if ($section == 'form') {
 					$form_values[$a] = $value;
 				}
 				continue;
 			}
 
-			if(!array_key_exists($section,$props)) {
+			if (!array_key_exists($section, $props)) {
 				$props[$section] = [];
 				$labels[$section] = [];
-				$values[$section] = [];
+				$selected[$section] = [];
 				$inputs[$section] = [];
 			}
-		
 
-			switch($a) {
-
-				case 'section': 
+			switch ($a) {
+				case 'section':
 					$props[$section][$b] = $value;
-				break;
+					break;
 
 				case 'items':
-
-					if($c === 'label') {
+					if ($c === 'label') {
 						$labels[$section][$b] = $value;
 					}
 
-					if($c === 'value') {
-						$values[$section][$b] = $value;
+
+					// checkboxes
+					if ($c === 'selected' && $value !== null && $value !== '') {
+						$selected[$section][$b] = true;
 					}
 
 
-					if($props[$section]['type'] == 'multiple choice') {
-
-						if($b === 'value' && $value !== null && $value !== '') {
-							//$values[$section] = $value;
-							$values[$section][$value * 1] = true;
-						}
-
-						if($c === 'input') {
-
-							if(!array_key_exists($b,$inputs[$section])) {
-								$inputs[$section][$b] = [];
-							}
-
-							$inputs[$section][$b][$d] = $value;
-						}
-
+					// radio, inputs unique name
+					if ($b === 'selected' && $value !== null && $value !== '') {
+						$selected[$section][$value * 1] = true;
 					}
 
-				break;
+					if ($c === 'input') {
+						if (!array_key_exists($b, $inputs[$section])) {
+							$inputs[$section][$b] = [];
+						}
 
+						$inputs[$section][$b][$d] = $value;
+					}
+
+					break;
 			}
-
-		} 
-
+		}
 
 		$sections = [];
 
-		foreach($props as $section => $value_) {
+		foreach ($props as $section => $value_) {
+			$obj = array_merge($value_, ['items' => []]);
 
-			$obj = array_merge($value_,['items' => []]);
-	
-			foreach($labels[$section] as $i => $row) {
+			foreach ($labels[$section] as $i => $row) {
 				$obj['items'][$i] = [
 					'label' => $row,
-					'value' => (!empty($values[$section][$i]) ? $values[$section][$i]: null)
+					'selected' => (!empty($selected[$section][$i]) ? $selected[$section][$i] : null),
+					'inputs' => (!empty($inputs[$section][$i]) ? $inputs[$section][$i] : null),
 				];
-
-				if($value_['type'] == 'multiple choice') {
-					$obj['items'][$i]['inputs'] = (!empty($inputs[$section][$i]) ? $inputs[$section][$i]: null);
-				}
 			}
 
-
 			$sections[] = $obj;
-
 		}
 
-
 		return ['form_values' => $form_values, 'sections' => $sections];
-
 	}
-
 }
 
 

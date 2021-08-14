@@ -58,15 +58,26 @@
 
 
 
-.ci_form_section_cloze_test_list_question input, .ci_form_section_multiple_choice_list input[type=text] {
+.ci_form_section_cloze_test_list_question input, .ci_form_section_multiple_choice_list input[type=text], .ci_form_section_multiple_choice_list .input, .ci_form_section_cloze_test_list_question .input {
 	outline: none;
 	border: none;
 	border-bottom: 1px dotted #000;
-	width: 6em;
+	min-width: 6em;
+}
+
+.ci_form_section_cloze_test_list_question .input, .ci_form_section_multiple_choice_list .input {
+	background: #f5f5f5;
+	width: 100%;
 }
 
 
-.ci_form_section_inputs_row input, .ci_form_section_inputs_row select, .ci_form_section_inputs_row textarea {
+.ci_form_section_cloze_test_list_question .input:after, .ci_form_section_multiple_choice_list .input:after {
+	content: "\00A0";
+}
+
+
+
+.ci_form_section_inputs_row input, .ci_form_section_inputs_row select, .ci_form_section_inputs_row textarea, .ci_form_section_inputs_row .input {
 	padding: 8px;
     background: white;
     border: 1px solid #ccc;
@@ -78,7 +89,7 @@
 }
 
 
-.ci_form_section.inputs_responsive .ci_form_section_inputs_row input, .ci_form_section.inputs_responsive .ci_form_section_inputs_row select, .ci_form_section.inputs_responsive .ci_form_section_inputs_row textarea {
+.ci_form_section.inputs_responsive .ci_form_section_inputs_row input, .ci_form_section.inputs_responsive .ci_form_section_inputs_row select, .ci_form_section.inputs_responsive .ci_form_section_inputs_row textarea, .ci_form_section.inputs_responsive .ci_form_section_inputs_row .input {
     border-radius: 2px;
 	padding: 4px;
     width: auto;	
@@ -91,7 +102,17 @@
 }
 
 .ci_form_section_inputs_row textarea {
-	width: 100%;	
+	width: 100%;
+}
+
+
+.ci_form_section.inputs_responsive .input:after, .ci_form_section_inputs_row .input:after {
+	content: "\00A0";
+}
+
+.ci_form_section.inputs_responsive .input, .ci_form_section_inputs_row .input {
+	width: 100%;
+	background: #f5f5f5;
 }
 
 
@@ -99,7 +120,7 @@
   position: relative;
 }
 
-.ci_form_section_multiple_choice_list input[name="radio-for-required-checkboxes"] {
+.ci_form_section_multiple_choice_list .radio_for_required_checkboxes {
     position: absolute;
     margin: 0;
     top: 0;
@@ -110,6 +131,12 @@
     pointer-events: none;
     border: none;
     background: none;
+
+	user-select: none;
+	-moz-user-select: none;
+	-khtml-user-select: none;
+	-webkit-user-select: none;
+	-o-user-select: none;
 }
 
 .ci_form_input_submit {
@@ -155,7 +182,7 @@
     margin-bottom: 12px;
 }
 
-.ci_form_section:not([class*="inputs rows"]):not(:last-child) {
+.ci_form_section:not([class*="_inputs"]):not(:last-child) {
 	border-bottom: 1px dotted #aaa;
     padding-bottom: 12px;
 }
@@ -185,13 +212,16 @@ ol.ci_form_section_cloze_test_list li.ci_form_section_cloze_test_list_question_e
 	margin-right: 0.2em;
 }
 
-ol.ci_form_section_cloze_test_list {
+.ci_form ol, .ci_form ul {
 	list-style: none;
 	counter-reset: li;
 }
 
-ol.ci_form_section_cloze_test_list li.ci_form_section_cloze_test_list_question::before {
-	content: counter(li); 
+/*
+ https://stackoverflow.com/questions/23699128/how-can-i-reset-a-css-counter-to-the-start-attribute-of-the-given-list 
+*/
+.ci_form ol li::before, .ci_form ul li::before  {
+	content: counter(li, var(--list_style_type));
 	display: inline-block; 
 	width: 1em; 
 	margin-left: -1.5em;
@@ -200,7 +230,7 @@ ol.ci_form_section_cloze_test_list li.ci_form_section_cloze_test_list_question::
 	direction: rtl;
  }
  
-ol.ci_form_section_cloze_test_list li.ci_form_section_cloze_test_list_question {
+.ci_form ol li:not([class$="_example"]) {
  	counter-increment: li;
 }
  

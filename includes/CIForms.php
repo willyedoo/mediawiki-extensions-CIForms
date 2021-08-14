@@ -1,6 +1,5 @@
 <?php
 
-
 /**
  * This file is part of the MediaWiki extension CIForms.
  *
@@ -22,58 +21,54 @@
  * @author thomas-topway-it <thomas.topway.it@mail.com>
  * @copyright Copyright © 2021, https://culturaitaliana.org
  */
-
-
-
-
-class CIForms {
-
+class CIForms
+{
 	protected static $loadModule = false;
 
 
 	// Register any render callbacks with the parser
-	public static function ParserFirstCallInit( Parser $parser ) {
-	
-		$parser->setFunctionHook( 'ci form', [ self::class, 'ci_form' ] );	//,SFH_OBJECT_ARGS
-		$parser->setFunctionHook( 'ci_form', [ self::class, 'ci_form' ] );	//,SFH_OBJECT_ARGS
+	public static function ParserFirstCallInit(Parser $parser)
+	{
+		$parser->setFunctionHook('ci form', [self::class, 'ci_form']);	//,SFH_OBJECT_ARGS
+		$parser->setFunctionHook('ci_form', [self::class, 'ci_form']);	//,SFH_OBJECT_ARGS
 
-		$parser->setFunctionHook( 'ci form section', [ self::class, 'ci_form_section' ] );
-		$parser->setFunctionHook( 'ci_form_section', [ self::class, 'ci_form_section' ] );
-
+		$parser->setFunctionHook('ci form section', [self::class, 'ci_form_section']);
+		$parser->setFunctionHook('ci_form_section', [self::class, 'ci_form_section']);
 	}
 
+	public static function CaptchaEnabled()
+	{
+		global $wgCIFormsGoogleRecaptchaSiteKey;
+		global $wgCIFormsGoogleRecaptchaSecret;
 
+		return (!empty($wgCIFormsGoogleRecaptchaSiteKey) && !empty($wgCIFormsGoogleRecaptchaSiteKey));
+	}
 
-
-	public static function BeforePageDisplay( OutputPage $outputPage, Skin $skin ) {
-
+	public static function BeforePageDisplay(OutputPage $outputPage, Skin $skin)
+	{
 		$title = $outputPage->getTitle();
 		$categories = $title->getParentCategories();
 		
 		//if(self::$loadModule) {
-		if(array_key_exists('Category:Pages_with_forms',$categories)) {
-
+		if (array_key_exists('Category:Pages_with_forms', $categories)) {
 			global $wgCIFormsGoogleRecaptchaSiteKey;
 			global $wgResourceBasePath;
 
-			$outputPage->addJsConfigVars(['ci_forms_google_recaptcha_site_key' => $wgCIFormsGoogleRecaptchaSiteKey]);
-			$outputPage->addModules( 'ext.CIForms.validation' );
-			//$outputPage->addModuleStyles( 'ext.CIForms.validation' );
-			$outputPage->addHeadItem('captcha_style', '<style>.grecaptcha-badge { visibility: hidden; display: none; }</style>' );
+			$outputPage->addModules('ext.CIForms.validation');
+
+			if (self::CaptchaEnabled()) {
+				$outputPage->addJsConfigVars(['ci_forms_google_recaptcha_site_key' => $wgCIFormsGoogleRecaptchaSiteKey]);
+				$outputPage->addHeadItem('captcha_style', '<style>.grecaptcha-badge { visibility: hidden; display: none; }</style>');
+			}
 
 			$css = '<link rel="stylesheet" href="' . $wgResourceBasePath . '/extensions/CIForms/resources/style.css" />';
 
-			$outputPage->addHeadItem('ci_forms_css', $css );
-
+			$outputPage->addHeadItem('ci_forms_css', $css);
 		}
-
-
 	}
 
-
-
-	public static function ci_form(Parser $parser,...$argv) {
-
+	public static function ci_form(Parser $parser, ...$argv)
+	{
 		self::$loadModule = true;
 
 		global $wgCIFormsSuccessMessage;
@@ -85,69 +80,62 @@ class CIForms {
 			'title' => null,
 			'success message' => null,	//$wgCIFormsSuccessMessage,
 			'error message' => null,	//$wgCIFormsErrorMessage
+			'form class' => '',	//$wgCIFormsErrorMessage
 
-		 ]; // email to which submit
+		]; // email to which submit
 
+		$parser->addTrackingCategory('ci-form');
 
-		$parser->addTrackingCategory( 'ci-form' );
+		$set_named_parameters = [];
 
-		
-		$lines = self::parse_function_arguments($named_parameters,$argv);
+		$lines = self::parse_function_arguments($argv, $named_parameters, $set_named_parameters);
 
-	
-		
 		$section_lines = [];
 
-
-		foreach($lines as $key => $value) {
+		foreach ($lines as $key => $value) {
 
 			// https://www.mediawiki.org/wiki/Strip_marker
 
-	// *** to-do include a check when a pipe is missing
+			// *** to-do add some logic to fix a missing pipe
 
-			if(!preg_match('/^(\x7F\'"`UNIQ.+?QINU`"\'\x7F){1}(\s+\x7F\'"`UNIQ.+?QINU`"\'\x7F)*$/',$value)) {
+			if (!preg_match('/^(\x7F\'"`UNIQ.+?QINU`"\'\x7F){1}(\s+\x7F\'"`UNIQ.+?QINU`"\'\x7F)*$/', $value)) {
 				unset($lines[$key]);
 				$section_lines[] = $value;
-
 			} else {
-				$lines[$key] = preg_replace('/\s+/',"\n",$value);
+				$lines[$key] = preg_replace('/\s+/', " ", $value);
 			}
-
-	
 		}
-
 
 		$output = '';
 
-
-
-
 		$url = Title::newFromText('Special:CIFormsSubmit')->getLocalURL();
 
-
-		$output .= '<form class="ci_form" action="' . $url . '" method="post">';
+		$output .= '<form class="ci_form' . (!empty($named_parameters['form class']) ? " " . htmlspecialchars($named_parameters['form class']) : '') . '" action="' . $url . '" method="post">';
 		$output .= '<div class="ci_form_container">';
 
-		if(!empty($named_parameters['title'])) {
+
+
+
+		// allow wiki-text and html in titles
+		if (!empty($named_parameters['title'])) {
+			$named_parameters['title'] = self::replace_wikitext_and_html($named_parameters['title']);
+		}
+
+		if (!empty($named_parameters['title'])) {
 			$output .= '<div class="ci_form_title">';
-			$output .= $named_parameters['title'];
+			$output .= self::replace_wikitext_and_html($named_parameters['title']);
 			$output .= '</div>';
 		}
 
-
 		$output .= '<div class="ci_form_sections_container' . (sizeof($lines) ? ' multiple_sections' : '') . '">';
 
-
-		if($section_lines) {
+		if ($section_lines) {
 			$output .= self::ci_form_section_process($section_lines);
 		}
 
-
-		if(sizeof($lines)) {
+		if (sizeof($lines)) {
 			$output .= implode($lines);
 		}
-
-
 
 		$output .= '</div>';
 
@@ -158,8 +146,9 @@ class CIForms {
 		$output .= '<input type="hidden" name="form_success-message" value="' . htmlspecialchars($named_parameters['success message']) . '">';
 		$output .= '<input type="hidden" name="form_error-message" value="' . htmlspecialchars($named_parameters['error message']) . '">';
 
-
-		$output .= '<input type="hidden" name="g-recaptcha-response">';
+		if (self::CaptchaEnabled()) {
+			$output .= '<input type="hidden" name="g-recaptcha-response">';
+		}
 
 		$title = $parser->getTitle();
 
@@ -167,165 +156,59 @@ class CIForms {
 
 		$output .= '<input class="ci_form_input_submit" type="submit" value="Submit">';
 
-
 		$output .= '</div>';
 
 		$output .= '</div>';
+
 		$output .= '<div class="ci_form_section_captcha">';
-		$output .= 'form protected using <a target="_blank" style="color:silver;text-decoration:" href="https://www.google.com/recaptcha/about/">Google recaptcha</a>';
+		if (self::CaptchaEnabled()) {
+			$output .= 'form protected using <a target="_blank" style="color:silver;text-decoration:" href="https://www.google.com/recaptcha/about/">Google recaptcha</a>';
+		}
 		$output .= '</div>';
+
 		$output .= '</form>';
 
-
-
-		return array( $output, 'noparse' => true, 'isHTML' => true);
-
+		return array($output, 'noparse' => true, 'isHTML' => true);
 	}
 
+	public static function ci_form_parse_input_symbol($value)
+	{
+		$input_type = 'text';
+		$placeholder = null;
 
-
-
-	private static function ci_form_section_replace_input($named_parameters,$value,$unique_id,$n,&$required,$inner = false) {
-
-	
-		switch($named_parameters['type']) {
-
-			case 'inputs': 
-			case 'inputs responsive': 
-
-				preg_match('/\[.*?\]\s*\*?/',$value,$match);
-
-				if(empty($match[0])) {
-					return '';
-				}
-
-				$value = $match[0];
-
-			break;
-
-
-			case 'multiple choice' :
-
-
-			break;
-
+		if (empty($value)) {
+			return [$input_type, $placeholder];
 		}
 
 
-		
+		// https://quasar.dev/vue-components/input
+		// text password textarea email search tel file number url time date
 
-		$i = 0;
-
-		return preg_replace_callback('/\[\s*(.*?)\s*\]\s*(\*)?/', function($matches) use ($named_parameters,$value,$unique_id,$n,$inner,&$i,&$required) {
-
-			$input_type = 'text';
-			$placeholder = null;
+		$input_types = ['text', 'password', 'textarea', 'email', 'search', 'tel', 'file', 'number', 'url', 'time', 'date'];
 
 
-		
-			// for now we allow multiple inputs per line
-			// only for multiple choice questions
+		// [first name]
+		// [first name=text]
+		// [email]
 
-			if($named_parameters['type'] != 'multiple choice' && $i > 0) {
-				return $matches[0];
-			}
+		list($a, $b) = explode('=', $value) + array(null, null);
 
-
-
-
-			switch($named_parameters['type']) {
-
-				case 'inputs' :
-				case 'inputs responsive' :
-
-					// https://quasar.dev/vue-components/input
-					// text password textarea email search tel file number url time date
-
-					$input_types = ['text', 'password', 'textarea', 'email', 'search', 'tel', 'file', 'number', 'url', 'time', 'date'];
-
-
-					if(!empty($matches[1])) {
-
-						// [first name]
-						// [first name=text]
-						// [email]
-
-						list($a,$b) = explode('=',$matches[1]) + array(null,null);
-			
-						if($b) {
-							$input_type = $b;
-							$placeholder = $a;
-
-						} else {
-
-							if(in_array($a,$input_types)) {
-								$input_type = $a;
-
-							} else {
-								$placeholder = $a;
-							} 
-					
-						}
-
-					}
-
-					$required = (!empty($matches[2]) ? ' data-required="1" required' : '');
-
-					if($required && empty($label) && !empty($placeholder)) {
-						$placeholder .= ' *';
-					}
-
-
-				break;
-
-
-				default: 
-					$required = ' data-required="1"';
-
-
-			}
-	
-
-
-			if(!$inner) {
-				$name = $unique_id . '_items_' . $n . '_value';
-
+		if ($b) {
+			$input_type = $b;
+			$placeholder = $a;
+		} else {
+			if (in_array($a, $input_types)) {
+				$input_type = $a;
 			} else {
-
-				// inputs inside multiple choice questions
-				$name = $unique_id . '_items_' . $n . '_input_' . $i;
+				$placeholder = $a;
 			}
+		}
 
-
-
-			switch($input_type) {
-
-				case 'textarea' :
-					$replacement = '<textarea rows="4" name="' . $name . '"' . ($placeholder ? ' placeholder="' . htmlspecialchars($placeholder) . '"' : '') . $required . '></textarea>';
-
-				break;
-
-				default: 
-				case 'text' :
-				case 'email' :
-  					$replacement = '<input name="' . $name . '" type="' . $input_type . '"' . ($placeholder ? ' placeholder="' . htmlspecialchars($placeholder) . '"' : '') . $required . '/>';
-				break;
-
-			}
-
-			$i++;
-
-			return $replacement;
-
-		},$value);
-
+		return [$input_type, $placeholder];
 	}
 
-
-
-
-	protected static function ci_form_section_process($argv) {
-
+	protected static function ci_form_section_process($argv)
+	{
 		$output = '';
 
 
@@ -338,42 +221,35 @@ class CIForms {
 			'suggestions' => null	// if multiple choice
 		];
 
+		$set_named_parameters = [];
+
+		$lines = self::parse_function_arguments($argv, $named_parameters, $set_named_parameters);
 
 
+		// alias
+		if ($named_parameters['type'] == 'cloze') {
+			$named_parameters['type'] = 'cloze test';
+		}
 
-		$lines = self::parse_function_arguments($named_parameters,$argv);
 
+		// alias
+		if ($named_parameters['type'] == 'input') {
+			$named_parameters['type'] = 'inputs';
+		}
+
+		
+		// cloze test list type default value
+		if (!in_array('list-type', $set_named_parameters) && $named_parameters['type'] == 'cloze test') {
+			$named_parameters['list-type'] = 'ordered';
+		}
 
 		$unique_id = uniqid();
 
+		$output .= '<div class="ci_form_section ' . htmlspecialchars(str_replace(' ', '_', $named_parameters['type'])) . '" data-id="' . $unique_id . '">';
 
-
-		$output .= '<div class="ci_form_section ' . htmlspecialchars(str_replace(' ','_',$named_parameters['type'])) . '" data-id="' . $unique_id . '">';
-
-	
-
-		switch($named_parameters['type']) {
-
-			case 'multiple choice': 
-
-	
-				switch($named_parameters['list-type']) {
-					case 'letters' :
-						$list_style = 'upper-latin';
-					break;
-					case 'ordered' :
-					case 'numbers' :
-						$list_style = 'decimal';
-					break;
-					case 'unordered' :
-						$list_style = 'circle';
-					break;
-			
-					default:
-						$list_style = 'none';
-
-				}
-
+		switch ($named_parameters['type']) {
+			case 'cloze test':
+			case 'multiple choice':
 				$ordered_styles = [
 					'decimal',
 					'decimal-leading-zero',
@@ -388,310 +264,367 @@ class CIForms {
 					'upper-alpha'
 				];
 
+				if (in_array($named_parameters['list-type'], $ordered_styles)) {
+					$list_style = $named_parameters['list-type'];
+				} else {
+					switch ($named_parameters['list-type']) {
+						case 'letters':
+							$list_style = 'upper-latin';
+							break;
 
+						case 'ordered':
+						case 'numbers':
+							$list_style = 'decimal';
+							break;
 
-				$output .= '<input type="hidden" name="' . $unique_id . '_section_multiple-choice-max-answers" value="' . htmlspecialchars($named_parameters['max answers']) . '">';
-				$output .= '<input type="hidden" name="' . $unique_id . '_section_multiple-choice-list-style" value="' . htmlspecialchars($list_style) . '">';
+						case 'unordered':
+							$list_style = 'disc';
+							break;
 
-			break;
+						default:
+							$list_style = 'none';
+					}
+				}
 
-			case 'inputs' :
-			case 'inputs responsive' :
+				$output .= '<input type="hidden" name="' . $unique_id . '_section_list-style" value="' . htmlspecialchars($named_parameters['list-type']) . '">';
 
+				if ($named_parameters['type'] == 'multiple choice') {
+					$output .= '<input type="hidden" name="' . $unique_id . '_section_multiple-choice-max-answers" value="' . htmlspecialchars($named_parameters['max answers']) . '">';
+				}
 
-			case 'cloze test' :
-			case 'cloze' :
+				break;
 
-
-
-			break;
-
-
+			case 'inputs':
+			case 'inputs responsive':
+				break;
 		}
 
 
 
+		// allow wiki-text and html in titles
+		if (!empty($named_parameters['title'])) {
+			$named_parameters['title'] = self::replace_wikitext_and_html($named_parameters['title']);
+		}
 
 		$output .= '<input type="hidden" name="' . $unique_id . '_section_type" value="' . htmlspecialchars($named_parameters['type']) . '">';
 		$output .= '<input type="hidden" name="' . $unique_id . '_section_title" value="' . htmlspecialchars($named_parameters['title']) . '">';
-	
 
-
-
-		if(!empty($named_parameters['title'])) {
+		if (!empty($named_parameters['title'])) {
 			$output .= '<div class="ci_form_section_title">';
 			$output .= $named_parameters['title'];
 			$output .= '</div>';
-
 		}
 
-
-
-		switch($named_parameters['type']) {
-
-			case 'inputs' :
-			case 'inputs responsive' :
-
-
+		switch ($named_parameters['type']) {
+			case 'inputs':
+			case 'inputs responsive':
 				$n = 0;
 
-				foreach($lines as $value) {	
-
-					$label = trim(preg_replace('/\[.*?\]\s*\*?/','',$value));
-
+				foreach ($lines as $value) {
 					$output .= '<div class="ci_form_section_inputs_row">';
 
-					$required = false;
-
-					$input = self::ci_form_section_replace_input($named_parameters,$value,$unique_id,$n,$required);
-
 					$output .= '<div class="ci_form_section_inputs_col' . ($named_parameters['type'] == 'inputs responsive' ? '-25' : '') . '">';
-					
-			
-					if(!empty($label)) {
-						$output .= '<label>' . $label . ($required ? ' *' : '') . '</label>';
-					}
-
-
-					if($named_parameters['type'] == 'inputs responsive') {
-						$output .= '</div>';
-						$output .= '<div class="ci_form_section_inputs_col-75">';
-					}
-
-
-					$output .= $input;
-					$output .= '</div>';
-
-					$output .= '</div>';
- 
-					
-					$n++;
-				}
-
-
-
-			break;
-
-
-
-			case 'multiple choice' :
-			
-				$list_type_ordered = in_array($list_style,$ordered_styles);
-
-
-				if(!$list_type_ordered) {
-					$output .= '<ul class="ci_form_section_multiple_choice_list" style="list-style:' . $list_style . '">';
-
-				} else {
-					$output .= '<ol class="ci_form_section_multiple_choice_list" style="list-style-type:' . $list_style . '">';
-				}
-
-
-				$n = 0;
-	
-				foreach($lines as $key => $value) {
-					$output .= '<li>';
-
-					// native validation, see the following:
-
-					// https://stackoverflow.com/questions/8287779/how-to-use-the-required-attribute-with-a-radio-input-field
-					// https://stackoverflow.com/questions/6218494/using-the-html5-required-attribute-for-a-group-of-checkboxes
-	
-					$output .= ($named_parameters['max answers'] > 1 && $n == 0 ? '<input id="radio-for-checkboxes" type="radio" name="radio-for-required-checkboxes" required/>' : '');
 
 					$output .= '<input type="hidden" name="' . $unique_id . '_items_' . $n . '_label" value="' . htmlspecialchars($value) . '" />';
-					$output .= '<input name="' . $unique_id . '_items_' . ($named_parameters['max answers'] > 1 ? $n . '_' : '') . 'value" type="' . ($named_parameters['max answers'] == 1 ? 'radio' : 'checkbox') .'" value="' . $n . '"' . ($named_parameters['max answers'] == 1 ? ' required' : '') . ' />';
 
-					$output .= self::ci_form_section_replace_input($named_parameters,$value,$unique_id,$n,$required,true);
+					$i = 0;
 
-					$output .=  '</li>';
+					$output .= preg_replace_callback(
+						'/([^\[\]]*)\[([^\[\]]*)\]\s*(\*)?/',
+						function($matches) use ($named_parameters, &$i, $n, $unique_id) {
+
+						// *** todo, redesign to allow more than 1 input per line
+							if ($i > 0) {
+								return $matches[0];
+							}
+
+							$label = $matches[1];
+
+							list($input_type, $placeholder) = self::ci_form_parse_input_symbol($matches[2]);
+
+							$required = (!empty($matches[3]) ? ' data-required="1" required' : '');
+
+							if ($required && !empty($placeholder)) {
+								$placeholder .= ' *';
+							}
+
+							$replacement = '';
+
+							if (!empty($label)) {
+								$replacement .= '<label>' . $label . ($required && empty($placeholder) ? ' *' : '') . '</label>';
+							}
+
+							if ($named_parameters['type'] == 'inputs responsive') {
+								$replacement .= '</div>';
+								$replacement .= '<div class="ci_form_section_inputs_col-75">';
+							}
+
+							switch ($input_type) {
+								case 'textarea':
+								// '_value' is appended for easy validation
+									$replacement .= '<textarea rows="4" name="' . $unique_id . '_items_' . $n . '_input_' . $i . '_value"' . ($placeholder ? ' placeholder="' . htmlspecialchars($placeholder) . '"' : '') . $required . '></textarea>';
+									break;
+
+								default:
+								case 'text':
+								case 'email':
+								// '_value' is appended for easy validation
+									$replacement .= '<input name="' . $unique_id . '_items_' . $n . '_input_' . $i . '_value" type="' . $input_type . '"' . ($placeholder ? ' placeholder="' . htmlspecialchars($placeholder) . '"' : '') . $required . '/>';
+									break;
+							}
+
+							$i++;
+
+							return $replacement;
+						},
+						$value
+					); // preg_replace_callback
+
+					$output .= '</div>';
+
+					$output .= '</div>';
+
 					$n++;
-
 				}
 
-				
+				break;
+
+			case 'multiple choice':
+				$list_type_ordered = in_array($list_style, $ordered_styles);
+
+
+				// https://stackoverflow.com/questions/23699128/how-can-i-reset-a-css-counter-to-the-start-attribute-of-the-given-list 
+
+				if (!$list_type_ordered) {
+					$output .= '<ul class="ci_form_section_multiple_choice_list" style="--list_style_type:' . $list_style . '">';
+				} else {
+					$output .= '<ol class="ci_form_section_multiple_choice_list" style="--list_style_type:' . $list_style . '">';
+				}
+
+				$n = 0;
+
+
+				// native validation, see the following:
+
+				// https://stackoverflow.com/questions/8287779/how-to-use-the-required-attribute-with-a-radio-input-field
+				// https://stackoverflow.com/questions/6218494/using-the-html5-required-attribute-for-a-group-of-checkboxes
+
+				$output .= ($named_parameters['max answers'] > 1 ? '<input class="radio_for_required_checkboxes" type="radio" name="' . uniqid() . '" required/>' : '');
+
+				foreach ($lines as $key => $value) {
+					$output .= '<li>';
+
+					$output .= '<input type="hidden" name="' . $unique_id . '_items_' . $n . '_label" value="' . htmlspecialchars($value) . '" />';
+
+					// if it's a radio, the input name shall be the same for all inputs
+					$output .= '<input name="' . $unique_id . '_items_' . ($named_parameters['max answers'] > 1 ? $n . '_' : '') . 'selected" type="' . ($named_parameters['max answers'] == 1 ? 'radio' : 'checkbox') . '" value="' . $n . '"' . ($named_parameters['max answers'] == 1 ? ' required' : '') . ' />';
+
+					$i = 0;
+
+					$output .= preg_replace_callback(
+						'/\[([^\[\]]*)\]/',
+						function($matches) use (&$i, $n, $unique_id) {
+							$replacement = '<input name="' . $unique_id . '_items_' . $n . '_input_' . $i . '" type="text" data-required="1" />';
+
+							$i++;
+
+							return $replacement;
+						},
+						$value
+					); // preg_replace_callback
+
+					$output .= '</li>';
+
+					$n++;
+				}
+
 				$output .= ($list_type_ordered ? '</ol>' : '</ul>');
 
+				break;
 
-			break;
-
-
-
-			case 'cloze test' :
-			case 'cloze' :
-
+			case 'cloze test':
 				$suggestions = [];
 
+				if (!empty($named_parameters['suggestions'])) {
+					$suggestions = explode(',', $named_parameters['suggestions']);
 
-				if(!empty($named_parameters['suggestions'])) {
-
-					$suggestions = explode(',',$named_parameters['suggestions']);
-
-					foreach($suggestions as $key => $word) {
+					foreach ($suggestions as $key => $word) {
 						$suggestions[$key] = trim(strtolower($word));
 					}
-
 				}
-
-
 
 				$items = [];
 				$answers = [];
 
-
-				foreach($lines as $key => $value) {
-
+				foreach ($lines as $key => $value) {
 					$example = false;
-					$inline_suggestion = null;
 					$inline_answer = null;
 
 					$value = trim($value);
-					$value = preg_replace('/\s+/',' ', $value);
+					$value = preg_replace('/\s+/', ' ', $value);
 
 
 					// *** to-do
 					// in a cloze test the asterisk used
 					// to mark an example is redundant
 
-					if($value[0] == '*') {
+					if ($value[0] == '*') {
 						$example = true;
-						$value = trim(substr($value,1));				
+						$value = trim(substr($value, 1));
 					}
 
+					preg_match_all('/\[\s*([^\[\]]*)\s*\]/', $value, $matches);
 
-					preg_match('/\[\s*(.+?)\s*\]/',$value,$match);
+					$inputs = [];
 
-					if(!empty($match)) {
-						$inline_suggestion = strtolower($match[1]);
+					if (!empty($matches[0])) {
+						foreach ($matches[0] as $i => $match) {
+							$inline_answer = null;
 
-						if($example) {
+							$inline_suggestion = strtolower($matches[1][$i]);
 
-							preg_match('/^\s*(.+?)\s*=\s*(.+?)\s*$/',$inline_suggestion,$match);
+							if ($inline_suggestion) {
+								preg_match('/^\s*(.+?)\s*=\s*(.+?)\s*$/', $inline_suggestion, $match_);
 
-							if(!empty($match[1])) {
-								$inline_suggestion = strtolower($match[1]);
-					
-								if(!empty($match[2])) {
-									$inline_answer = strtolower($match[2]);
+								if (!empty($match_[1])) {
+									$inline_suggestion = strtolower($match_[1]);
+
+									if (!empty($match_[2])) {
+										$inline_answer = strtolower($match_[2]);
+									}
 								}
 
+								if ($example) {
+									$answers[] = $inline_suggestion;	//($inline_answer ?? $inline_suggestion);
+								}
 							}
 
-							if($example) {
-								$answers[] = $inline_suggestion;	//($inline_answer ?? $inline_suggestion);
-							}
-
+							$inputs[] = [$inline_suggestion, $inline_answer];
 						}
-					
 					}
 
-
-					$items[] = [$value,$example,$inline_suggestion,$inline_answer];
-					
+					$items[] = [$value, $example, $inputs];
 				}
-
-		
-				$has_inline_suggestions = false;
-
-				// we take the first line which is not an
-				// example to determine the kind of test
-				foreach($items as $value) {
-					list($item, $example, $inline_suggestion, $inline_answer) = $value;
-
-					if(!$example) {
-						$has_inline_suggestions = !empty($inline_suggestion);
-						break;
-					}
-
-				}
-
-
 
 				shuffle($suggestions);
 
-				$output .= '<input type="hidden" name="' . $unique_id . '_section_cloze-test-suggestions-type" value="' . htmlspecialchars($has_inline_suggestions ? 'inline' : 'framed') . '" />';
-				$output .= '<input type="hidden" name="' . $unique_id . '_section_cloze-test-suggestions" value="' . htmlspecialchars(implode(',',$suggestions)) . '" />';
-				$output .= '<input type="hidden" name="' . $unique_id . '_section_cloze-test-answers" value="' . htmlspecialchars(implode(',',$answers)) . '" />';
+				$output .= '<input type="hidden" name="' . $unique_id . '_section_cloze-test-suggestions" value="' . htmlspecialchars(implode(',', $suggestions)) . '" />';
+				$output .= '<input type="hidden" name="' . $unique_id . '_section_cloze-test-answers" value="' . htmlspecialchars(implode(',', $answers)) . '" />';
 				
 
-				if(!empty($suggestions)) {
-
+				// suggestions framed
+				if (!empty($suggestions)) {
 					$output .= '<div class="ci_form_section_cloze_test_suggestions">';
-						
-				
-					foreach($suggestions as $word) {
 
-						$output .= '<span class="ci_form_section_cloze_test_suggestions_word' . (in_array($word,$answers) ? '_answered' : '') . '">';
+					foreach ($suggestions as $word) {
+						$output .= '<span class="ci_form_section_cloze_test_suggestions_word' . (in_array($word, $answers) ? '_answered' : '') . '">';
 						$output .= $word;
 						$output .= '</span>';
 
-						if(in_array($word,$answers)) {
+						if (in_array($word, $answers)) {
 							$key = array_search($word, $answers);
 							unset($answers[$key]);
 						}
-
 					}
 
 					$output .= '</div>';
-
 				}
 
+				$list_type_ordered = in_array($list_style, $ordered_styles);
 
 
-				$output .= '<ol class="ci_form_section_cloze_test_list">';
+				// https://stackoverflow.com/questions/23699128/how-can-i-reset-a-css-counter-to-the-start-attribute-of-the-given-list 
+
+				if (!$list_type_ordered) {
+					$output .= '<ul class="ci_form_section_cloze_test_list" style="--list_style_type:' . $list_style . '">';
+				} else {
+					$output .= '<ol class="ci_form_section_cloze_test_list" style="--list_style_type:' . $list_style . '">';
+				}
 
 				$n = 0;
-				
-				foreach($items as $value) {
 
-					list($label, $example, $inline_suggestion, $inline_answer) = $value;
-
-					$replacement = '';
-
-					if($has_inline_suggestions) {
-						$replacement .= '<span class="ci_form_section_cloze_test_section_list_question_suggestion">(' . $inline_suggestion . ')</span> ';
-					}
-
-
-					$replacement .= '<input type="hidden" name="' . $unique_id . '_items_' . $n . '_label" value="' . htmlspecialchars(($example ? '* ' : '') . $label) . '" />';
-
-
-					if($example) {
-						$replacement .= '<span class="ci_form_section_cloze_test_list_question_answered">' . ($inline_answer ? $inline_answer : $inline_suggestion) . '</span>';
-
-					} else {
-						$replacement .= '<input name="' . $unique_id . '_items_' . $n . '_value" class="ci_cloze_test_section_list_question_blank" data-required="1" type="text" />';
-					}
-
-			
+				foreach ($items as $value) {
+					list($label, $example, $inputs) = $value;
 
 					$output .= '<li class="ci_form_section_cloze_test_list_question' . ($example ? '_example' : '') . '">';
-					$output .= preg_replace('/\[.*?\]/', $replacement, $label);
+
+					$output .= '<input type="hidden" name="' . $unique_id . '_items_' . $n . '_label" value="' . htmlspecialchars(($example ? '* ' : '') . $label) . '" />';
+
+					$i = 0;
+
+					$label = preg_replace_callback(
+						'/\[([^\[\]]*)\]/',
+						function($matches) use (&$i, &$inputs, $example, $n, $unique_id) {
+							list($inline_suggestion, $inline_answer) = array_shift($inputs);
+
+							$replacement = '';
+
+							if ($inline_suggestion) {
+								$replacement .= '<span class="ci_form_section_cloze_test_section_list_question_suggestion">(' . $inline_suggestion . ')</span> ';
+							}
+
+							if ($example) {
+								$replacement .= '<span class="ci_form_section_cloze_test_list_question_answered">' . ($inline_answer ? $inline_answer : $inline_suggestion) . '</span>';
+							} else {
+							// '_value' is appended for easy validation
+								$replacement .= '<input name="' . $unique_id . '_items_' . $n . '_input_' . $i . '_value" type="text" />';
+							}
+
+							$i++;
+
+							return $replacement;
+						},
+						$label
+					); // preg_replace_callback
+
+					$output .= $label;
 					$output .= '</li>';
 
-
 					$n++;
-					
 				}
 
-				$output .= '</ol>';			
-				
+				$output .= ($list_type_ordered ? '</ol>' : '</ul>');
 
-
-			break;
-
-
+				break;
 		}
-
-
 
 		$output .= '</div>';
 
-
 		return $output;
-
-
 	}
+
+	protected static function replace_wikitext_and_html($value)
+	{
+		$context = new RequestContext();
+		$out_ = new OutputPage($context);
+
+		$unique_id = uniqid();
+
+		$replacements = [];
+
+		$value = preg_replace_callback(
+			'/<[^<>]+>/',
+			function($matches) use (&$replacements, $unique_id) {
+				$replacements[] = $matches[0];
+
+				return $unique_id;
+			},
+			$value
+		);
+
+		$value = Parser::stripOuterParagraph($out_->parseAsContent($value));
+
+		$value = preg_replace_callback(
+			'/' . $unique_id . '/',
+			function($matches) use (&$replacements, $unique_id) {
+				return array_shift($replacements);
+			},
+			$value
+		);
+
+		return $value;
+	}
+
 
 
 
@@ -699,58 +632,79 @@ class CIForms {
 	// check also here
 	// https://www.mediawiki.org/wiki/Manual:Parser_functions#The_setFunctionHook_hook
 
-	protected static function parse_function_arguments(&$named_parameters,$argv) {
-		
-		
+	protected static function parse_function_arguments($argv, &$named_parameters, &$set_named_parameters)
+	{
 		$lines = [];
 
+		//$set_named_parameters = [];
+		$unique_id = uniqid();
 
-		foreach($argv as $value) {
-
+		foreach ($argv as $value) {
 			$value = trim($value);
-			$value = preg_replace('/\040+/',' ', $value);
+			$value = preg_replace('/\040+/', ' ', $value);
 
-			if(empty($value)) {
+			if (empty($value)) {
 				continue;
 			}
 
 
 			// square brackets may contain an equal symbol
 			// so we temporarily remove it
-			$value_ = preg_replace('/\[\s*(.+?)\s*\]\s*\*?/','',$value);
+			//$value_ = preg_replace('/\[\s*(.+?)\s*\]\s*\*?/','',$value);
 
-			
-			if(strpos($value_,'=') !== false) {
-				$values = explode('=',$value_);
-				$value_ = trim(str_replace('_',' ',$values[0]));
-				if(array_key_exists($value_,$named_parameters)) {
-					$named_parameters[$value_] = trim($values[1]);
+
+
+			// replace html and square brackets with some identifier
+
+			$replacements = [];
+			$value_ = preg_replace_callback(
+				'/(<[^<>]+>)|(\[[^\[\]]+\])/',
+				function($matches) use (&$replacements, $unique_id) {
+					if ($matches[1]) {
+						$replacements[] = '<html>' . $matches[0] . '</html>';
+					} else {
+						$replacements[] = $matches[0];
+					}
+
+					return $unique_id;
+				},
+				$value
+			);
+
+			if (strpos($value_, '=') !== false) {
+				list($parameter_key, $parameter_value) = explode('=', $value_, 2);
+
+				$parameter_key = trim(str_replace('_', ' ', $parameter_key));
+
+				if (array_key_exists($parameter_key, $named_parameters)) {
+					$parameter_value = preg_replace_callback(
+						'/' . $unique_id . '/',
+						function($matches) use (&$replacements, $unique_id) {
+							return array_shift($replacements);
+						},
+						$parameter_value
+					);
+
+					$named_parameters[$parameter_key] = trim($parameter_value);
+
+					$set_named_parameters[] = $parameter_key;
+
 					continue;
 				}
-
 			}
 
 			$lines[] = $value;
-
 		}
 
-
 		return $lines;
-
 	}
 
-
-
-	public static function ci_form_section(Parser $parser, ...$argv) {
-	
+	public static function ci_form_section(Parser $parser, ...$argv)
+	{
 		$output = self::ci_form_section_process($argv);
-		
-	 	return array( $output, 'noparse' => true, 'isHTML' => true);
 
-	 }
-
-
-
+		return array($output, 'noparse' => true, 'isHTML' => true);
+	}
 }
 
 

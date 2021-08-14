@@ -1,6 +1,5 @@
 
 
-
 /**
  * This file is part of the MediaWiki extension CIForms.
  *
@@ -26,13 +25,15 @@
 
 $(function() {
 
-function escapeHtml(text) {
-  return text
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#039;");
+
+
+function escape(s) {
+    return ('' + s)
+        .replace(/&/g, '\x26')
+        .replace(/'/g, '\x27')
+        .replace(/"/g, '\x22')
+        .replace(/</g, '\x3C')
+        .replace(/>/g, '\x3E');
 }
 
 
@@ -63,18 +64,15 @@ function escapeHtml(text) {
 
 
 
-	var radioForCheckboxes = document.getElementById('radio-for-checkboxes')
-
-
 	$(".ci_form li").each(function(index) {
 
 		var el = this
 
 		var section_el = $(this).closest('.ci_form_section')
 
+		var radioForCheckboxes = $(section_el).find('.radio_for_required_checkboxes').first()
 		
 		var max_answers = $(section_el).find('input[type=hidden][name$=_multiple-choice-max-answers]').val()
-
 
 
 		$(this).find('input[type=text]').on("click", function() {
@@ -93,7 +91,8 @@ function escapeHtml(text) {
 			$(el).find('input[type=radio]').prop("checked", true);
 			$(el).find('input[type=checkbox]').prop("checked", true);
 
-			radioForCheckboxes.checked = count
+
+			radioForCheckboxes[0].checked = (count ? true : false)
 
 		})
 
@@ -109,7 +108,8 @@ function escapeHtml(text) {
 				return false
 			}
 
-			radioForCheckboxes.checked = count
+
+			radioForCheckboxes[0].checked = (count ? true : false)
 
 		})
 
@@ -128,12 +128,12 @@ function escapeHtml(text) {
 		$(section_el).find('li').each(function() {
 			var el = this
 
-			$(this).find("input[type=radio][name$=_value]:checked").each(function() {
+			$(this).find("input[type=radio][name$=_selected]:checked").each(function() {
 				$(el).find('input[type=text][data-required="1"]').prop("required", true);
 			})
 
 
-			$(this).find("input[type=radio][name$=_value]:not(:checked)").each(function() {
+			$(this).find("input[type=radio][name$=_selected]:not(:checked)").each(function() {
 				$(el).find('input[type=text]').prop("required", false);	
 			})
 
@@ -151,12 +151,12 @@ function escapeHtml(text) {
 		$(section_el).find('li').each(function() {
 			var el = this
 
-			$(this).find("input[type=checkbox][name$=_value]:checked").each(function() {
+			$(this).find("input[type=checkbox][name$=_selected]:checked").each(function() {
 				$(el).find('input[type=text][data-required="1"]').prop("required", true);
 			})
 
 
-			$(this).find("input[type=checkbox][name$=_value]:not(:checked)").each(function() {
+			$(this).find("input[type=checkbox][name$=_selected]:not(:checked)").each(function() {
 				$(el).find('input[type=text]').prop("required", false);	
 			})
 
@@ -187,41 +187,26 @@ function escapeHtml(text) {
 			}
 
 
-			var n = 0;
-			var count = 0;
-
-			var examples = 0;
-
-
-			$(this).find("input[type=text][name$=_label]" ).each(function() {
-
-				if($(this).val().trim().charAt(0) == '*') {
-					examples++
-				}
-
-			})
-
-
+			var inputs = 0;
+			var submitted = 0;
 
 			$(this).find("input[type=text][name$=_value]" ).each(function() {
 
 				var val = $(this).val().trim()
 
 				if(val != '' && val != null) {
-					count++
+					submitted++
 				}
 				
-				n++
+				inputs++
 			})
 
 
-			var min = Math.floor((n - examples) / 2) + 1
+			var min = Math.floor(inputs / 2) + 1
 
-			if(count < min) {
+			if(submitted < min) {
 				evt.preventDefault();
-
-				alert('Please enter at least ' + min + ' answers for the question "' + escapeHtml(question_name) + '"')
-
+				alert('Please enter at least ' + min + ' answers for the question "' + escape(question_name) + '"')
 				return false
 			}
 

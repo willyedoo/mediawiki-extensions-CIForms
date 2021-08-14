@@ -23,17 +23,5 @@
  * @copyright Copyright ©2021, https://culturaitaliana.org
  */
 
-$magicWords = [];
-
-
-$magicWords['en'] = [
-
-	'ci_form_section' => [ 0, 'ci_form_section' ],
-	'ci form section' => [ 0, 'ci form section' ],
-
-	'ci_form' => [ 0, 'ci_form' ],
-	'ci form' => [ 0, 'ci form' ],
-	
-];
 
 
