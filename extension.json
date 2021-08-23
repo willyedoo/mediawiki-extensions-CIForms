@@ -16,6 +16,7 @@
 		"CIFormsSubmit": "includes/specials/CIFormsSubmit.php"
 	},
 	"ExtensionMessagesFiles": {
+		"CIFormsAlias": "CIForms.alias.php",
 		"CIFormsMagic": "CIForms.i18n.php"
 	},
 	"Hooks": {

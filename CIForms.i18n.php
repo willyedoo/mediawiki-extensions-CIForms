@@ -24,7 +24,6 @@
 
 $magicWords = [];
 
-
 $magicWords['en'] = [
 
 	'ci_form_section' => [ 0, 'ci_form_section' ],
@@ -32,7 +31,5 @@ $magicWords['en'] = [
 
 	'ci_form' => [ 0, 'ci_form' ],
 	'ci form' => [ 0, 'ci form' ],
-	
+
 ];
-
-
