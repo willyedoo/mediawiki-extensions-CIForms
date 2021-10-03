@@ -1,4 +1,5 @@
 {
+	"@metadata": {},
 	"ci-form": "Pages with forms",
 	"ci-forms-extension-description": "Forms with autovalidation, multiple choice questions and Cloze tests",
 	"ci-forms-submit": "Form submission",
@@ -13,4 +14,3 @@
 	"ci-forms-recaptcha-error": "Recaptcha error ($1). Please try again or write at <span class=\"ci_text_highlight\">$2</span>",
 	"ci-forms-recaptcha-negative-score": "Negative score. Please write at <span class=\"ci_text_highlight\">$1</span> if your attempt is legitimate"
 }
-

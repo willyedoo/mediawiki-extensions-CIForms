@@ -23,19 +23,8 @@
  * @copyright Copyright © 2021, https://culturaitaliana.org
  */
 
-
-
-//include_once __DIR__ . '/vendor/autoload.php';
-
-
-// reference the Dompdf namespace
 use Dompdf\Dompdf;
 use PHPMailer\PHPMailer\PHPMailer;
-
-include_once dirname(__FILE__,3) . '/vendor/autoload.php';
-
-
-
 
 class CIFormsSubmit extends SpecialPage {
 
