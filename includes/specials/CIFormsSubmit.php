@@ -65,10 +65,11 @@ class CIFormsSubmit extends SpecialPage {
 			return $this->exit( $out, $this->msg( 'ci-forms-email-not-enabled' ) );
 		}
 
-		if ( CIForms::CaptchaEnabled() ) {
+		if ( CIForms::isCaptchaEnabled() ) {
 			list( $result, $message, $captcha_message ) =
 				$this->check_captcha( $post ) + [ null, null, null ];
 
+			// @phan-suppress-next-line PhanSuspiciousValueComparison
 			if ( $result === false ) {
 				return $this->exit( $out,
 					$this->msg( $message, $captcha_message, $wgCIFormsSenderEmail ) );
@@ -212,13 +213,13 @@ class CIFormsSubmit extends SpecialPage {
 	 * @param OutputPage $out
 	 * @param string $message
 	 */
-	protected function exit( $out, $message ) {
+	protected function exit( $out, $message ): void {
 		$html = '<p>' . $message . '</p>';
 		$out->addHTML( $html );
 	}
 
 	/**
-	 * @param string $post
+	 * @param array $post
 	 * @return array|bool[]
 	 */
 	protected function check_captcha( $post ) {
@@ -242,11 +243,14 @@ class CIFormsSubmit extends SpecialPage {
 		// use json_decode to extract json response
 		$response = json_decode( $response, true );
 
+		// @phan-suppress-next-line PhanTypeArraySuspiciousNullable
 		if ( $response['success'] === false ) {
+			// @phan-suppress-next-next-line PhanTypeArraySuspiciousNullable
 			// phpcs:ignore Generic.PHP.NoSilencedErrors.Discouraged
 			return [ false, 'ci-forms-recaptcha-error', @$response['error-codes'][0] ];
 		}
 
+		// @phan-suppress-next-line PhanTypeArraySuspiciousNullable
 		if ( $response['success'] == true && $response['score'] <= 0.5 ) {
 			return [ false, 'ci-forms-recaptcha-negative-score' ];
 		}
@@ -271,6 +275,7 @@ class CIFormsSubmit extends SpecialPage {
 			$value = trim( $value );
 
 			list( $section, $a, $b, $c, $d ) =
+				// @phan-suppress-next-line PhanSuspiciousBinaryAddLists
 				explode( '_', $i ) + [ null, null, null, null, null ];
 
 			if ( in_array( $section, $exclude ) ) {
@@ -283,6 +288,7 @@ class CIFormsSubmit extends SpecialPage {
 			if ( !array_key_exists( $section, $props ) ) {
 				$props[$section] = [];
 				$labels[$section] = [];
+				// @phan-suppress-next-line PhanUndeclaredVariableDim
 				$selected[$section] = [];
 				$inputs[$section] = [];
 			}
@@ -304,7 +310,7 @@ class CIFormsSubmit extends SpecialPage {
 
 					// radio, inputs unique name
 					if ( $b === 'selected' && $value !== null && $value !== '' ) {
-						$selected[$section][$value * 1] = true;
+						$selected[$section][$value] = true;
 					}
 
 					if ( $c === 'input' ) {
@@ -337,8 +343,8 @@ class CIFormsSubmit extends SpecialPage {
 	}
 
 	/**
-	 * @param string $form_values
-	 * @param array $sections
+	 * @param string[] $form_values
+	 * @param array[] $sections
 	 * @return string
 	 */
 	protected function create_output( $form_values, $sections ) {
@@ -502,13 +508,15 @@ class CIFormsSubmit extends SpecialPage {
 								$replacement_inner = '';
 
 								if ( $inline_suggestion ) {
+									// phpcs:ignore Generic.Files.LineLength.TooLong
 									$replacement_inner .= '<span class="ci_form_section_cloze_test_section_list_question_suggestion">(' .
 										$inline_suggestion . ')</span> ';
 								}
 
 								if ( $example ) {
+									// phpcs:ignore Generic.Files.LineLength.TooLong
 									$replacement_inner .= '<span class="ci_form_section_cloze_test_list_question_answered">' .
-										( $inline_answer ? $inline_answer : $inline_suggestion ) .
+										( $inline_answer ?: $inline_suggestion ) .
 										'</span> ';
 								} else {
 									$replacement_inner .= '<span class="input">' .

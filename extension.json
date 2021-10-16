@@ -23,8 +23,8 @@
 		"CIFormsMagic": "CIForms.i18n.php"
 	},
 	"Hooks": {
-		"ParserFirstCallInit": "CIForms::ParserFirstCallInit",
-		"BeforePageDisplay": "CIForms::BeforePageDisplay"
+		"ParserFirstCallInit": "CIForms::onParserFirstCallInit",
+		"BeforePageDisplay": "CIForms::onBeforePageDisplay"
 	},
 	"ResourceFileModulePaths": {
 		"localBasePath": "",

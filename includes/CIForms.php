@@ -19,7 +19,7 @@
  * @file
  * @ingroup extensions
  * @author thomas-topway-it <thomas.topway.it@mail.com>
- * @copyright Copyright © 2021, https://culturaitaliana.org
+ * @copyright Copyright © 2021, https://wikispgere.org
  */
 
 class CIForms {
@@ -32,7 +32,7 @@ class CIForms {
 	 *
 	 * @param Parser $parser
 	 */
-	public static function ParserFirstCallInit( Parser $parser ) {
+	public static function onParserFirstCallInit( Parser $parser ) {
 		$parser->setFunctionHook( 'ci form', [ self::class, 'ci_form' ] ); // ,SFH_OBJECT_ARGS
 		$parser->setFunctionHook( 'ci_form', [ self::class, 'ci_form' ] ); // ,SFH_OBJECT_ARGS
 
@@ -44,7 +44,7 @@ class CIForms {
 	 * @param OutputPage $outputPage
 	 * @param Skin $skin
 	 */
-	public static function BeforePageDisplay( OutputPage $outputPage, Skin $skin ) {
+	public static function onBeforePageDisplay( OutputPage $outputPage, Skin $skin ) {
 		$title = $outputPage->getTitle();
 		$categories = $title->getParentCategories();
 
@@ -55,8 +55,10 @@ class CIForms {
 
 			$outputPage->addModules( 'ext.CIForms.validation' );
 
-			if ( self::CaptchaEnabled() ) {
-				$outputPage->addJsConfigVars( [ 'ci_forms_google_recaptcha_site_key' => $wgCIFormsGoogleRecaptchaSiteKey ] );
+			if ( self::isCaptchaEnabled() ) {
+				$outputPage->addJsConfigVars( [
+					'ci_forms_google_recaptcha_site_key' => $wgCIFormsGoogleRecaptchaSiteKey
+				] );
 				$outputPage->addHeadItem( 'captcha_style',
 					'<style>.grecaptcha-badge { visibility: hidden; display: none; }</style>' );
 			}
@@ -72,7 +74,7 @@ class CIForms {
 	/**
 	 * @return bool
 	 */
-	public static function CaptchaEnabled() {
+	public static function isCaptchaEnabled() {
 		global $wgCIFormsGoogleRecaptchaSiteKey;
 		// phpcs:ignore MediaWiki.VariableAnalysis.UnusedGlobalVariables.UnusedGlobal$wgCIFormsGoogleRecaptchaSecret
 		global $wgCIFormsGoogleRecaptchaSecret;
@@ -82,7 +84,7 @@ class CIForms {
 
 	/**
 	 * @param Parser $parser
-	 * @param mixed $argv
+	 * @param mixed ...$argv
 	 * @return array
 	 */
 	public static function ci_form( Parser $parser, ...$argv ) {
@@ -163,7 +165,7 @@ class CIForms {
 		$output .= '<input type="hidden" name="form_error-message" value="' .
 			htmlspecialchars( $named_parameters['error message'] ) . '">';
 
-		if ( self::CaptchaEnabled() ) {
+		if ( self::isCaptchaEnabled() ) {
 			$output .= '<input type="hidden" name="g-recaptcha-response">';
 		}
 
@@ -176,7 +178,8 @@ class CIForms {
 		$output .= '</div>';
 		$output .= '<div class="ci_form_section_captcha">';
 
-		if ( self::CaptchaEnabled() ) {
+		if ( self::isCaptchaEnabled() ) {
+			// phpcs:ignore Generic.Files.LineLength.TooLong
 			$output .= 'form protected using <a target="_blank" style="color:silver;text-decoration:" href="https://www.google.com/recaptcha/about/">Google recaptcha</a>';
 		}
 
@@ -184,6 +187,7 @@ class CIForms {
 		$output .= '</form>';
 
 		return [
+			// @phan-suppress-next-line SecurityCheck-XSS
 			$output,
 			'noparse' => true,
 			'isHTML' => true
@@ -215,7 +219,7 @@ class CIForms {
 
 			// square brackets may contain an equal symbol
 			// so we temporarily remove it
-			//$value_ = preg_replace('/\[\s*(.+?)\s*\]\s*\*?/','',$value);
+			// $value_ = preg_replace('/\[\s*(.+?)\s*\]\s*\*?/','',$value);
 
 			// replace html and square brackets with some identifier
 
@@ -278,7 +282,7 @@ class CIForms {
 	}
 
 	/**
-	 * @param string $argv
+	 * @param array|string[] $argv
 	 * @return string
 	 */
 	protected static function ci_form_section_process( $argv ) {
@@ -626,12 +630,13 @@ class CIForms {
 								$replacement = '';
 
 								if ( $inline_suggestion ) {
+									// phpcs:ignore Generic.Files.LineLength.TooLong
 									$replacement .= '<span class="ci_form_section_cloze_test_section_list_question_suggestion">(' .
 										$inline_suggestion . ')</span> ';
 								}
 								if ( $example ) {
 									$replacement .= '<span class="ci_form_section_cloze_test_list_question_answered">' .
-										( $inline_answer ? $inline_answer : $inline_suggestion ) .
+										( $inline_answer ?: $inline_suggestion ) .
 										'</span>';
 								} else {
 									// '_value' is appended for easy validation
@@ -689,6 +694,7 @@ class CIForms {
 		// [first name=text]
 		// [email]
 
+		// @phan-suppress-next-line PhanSuspiciousBinaryAddLists
 		list( $a, $b ) = explode( '=', $value ) + [ null, null ];
 
 		if ( $b ) {
@@ -706,11 +712,12 @@ class CIForms {
 
 	/**
 	 * @param Parser $parser
-	 * @param mixed $argv
+	 * @param mixed ...$argv
 	 * @return array
 	 */
-	public static function ci_form_section( Parser $parser, $argv ) {
+	public static function ci_form_section( Parser $parser, ...$argv ) {
 		$output = self::ci_form_section_process( $argv );
+		// @phan-suppress-next-line SecurityCheck-XSS
 		return [ $output, 'noparse' => true, 'isHTML' => true ];
 	}
 
