@@ -6,6 +6,9 @@
 	"descriptionmsg": "ci-forms-extension-description",
 	"license-name": "GPL-2.0-or-later",
 	"type": "parserhook",
+	"requires": {
+		"MediaWiki": ">= 1.31.0"
+	},
 	"MessagesDirs": {
 		"CIForms": [
 			"i18n"
@@ -42,8 +45,11 @@
 			"styles": [
 				"style.css"
 			],
-			"targets": [ "desktop", "mobile" ]
+			"targets": [
+				"desktop",
+				"mobile"
+			]
 		}
 	},
-	"manifest_version": 1
+	"manifest_version": 2
 }
