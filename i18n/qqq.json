@@ -1,0 +1,20 @@
+{
+	"@metadata": {
+		"authors": [
+			"Kizule"
+		]
+	},
+	"ci-form": "Name of the tracking category",
+	"ci-forms-desc": "{{desc|name=CIForms|url=https://www.mediawiki.org/wiki/Extension:CIForms}}",
+	"ci-forms-submit": "Label for the button that activates the action of form submission",
+	"ci-forms-email-not-enabled": "An error message",
+	"ci-forms-recipient-not-found": "An error message",
+	"ci-forms-recipient-invalid": "An error message",
+	"ci-forms-email-subject": "Subject of the email sent by the extension. Parameters:\n* $1 - a form name\n* $2 - the page name",
+	"ci-forms-dispatch-error": "An error message. Parameters:\n* $1 - Email of sender",
+	"ci-forms-dispatch-success": "Success message shown on Special:CIFormsSubmit after dispatching form",
+	"ci-forms-google-recaptcha-secret-not-set": "An error message",
+	"ci-forms-recaptcha-challenge-not-found": "An error message",
+	"ci-forms-recaptcha-error": "An error message. Parameters:\n* $1 - An error code\n* $2 - Email to which message should be sent in case of need to contact",
+	"ci-forms-recaptcha-negative-score": "An error message. Parameters:\n* $1 - Email to which message should be sent in case of need to contact"
+}

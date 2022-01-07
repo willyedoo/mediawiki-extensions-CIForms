@@ -1,8 +1,13 @@
 {
-	"@metadata": {},
+	"@metadata": {
+		"authors": [
+			"thomas-topway-it",
+			"Kizule"
+		]
+	},
 	"ci-form": "Pages with forms",
-	"ci-forms-extension-description": "Forms with autovalidation, multiple choice questions and Cloze tests",
-	"ciformssubmit": "Form submission",
+	"ci-forms-desc": "Forms with autovalidation, multiple choice questions and Cloze tests",
+	"ci-forms-submit": "Form submission",
 	"ci-forms-email-not-enabled": "This wiki is not enabled for sending email",
 	"ci-forms-recipient-not-found": "Recipient email not found",
 	"ci-forms-recipient-invalid": "Recipient email not valid",
