@@ -18,7 +18,7 @@
  * @file
  * @ingroup extensions
  * @author thomas-topway-it <thomas.topway.it@mail.com>
- * @copyright Copyright © 2021, https://culturaitaliana.org
+ * @copyright Copyright © 2021-2022, https://wikisphere.org
  */
 
 use Dompdf\Dompdf;
@@ -29,11 +29,9 @@ if ( is_readable( __DIR__ . '/../../vendor/autoload.php' ) ) {
 }
 
 class CIFormsSubmit extends SpecialPage {
-
 	public function __construct() {
 		// not listed in the special pages index
-		$listed = false;
-		parent::__construct( 'CIFormsSubmit', '', $listed );
+		parent::__construct( 'CIFormsSubmit', '', false );
 	}
 
 	/**
@@ -47,23 +45,13 @@ class CIFormsSubmit extends SpecialPage {
 		$out = $this->getOutput();
 		// $out->addModuleStyles( 'ext.CIForms.validation' );
 
-		global $wgResourceBasePath;
-		$css =
-			'<link rel="stylesheet" href="' . $wgResourceBasePath .
-			'/extensions/CIForms/resources/style.css" />';
-
-		$out->addHeadItem( 'ci_forms_css', $css );
-
 		// phpcs:ignore MediaWiki.Usage.SuperGlobalsUsage.SuperGlobals
 		$post = $_POST;
 		// $request->getArray( 'data' );
 
+		global $wgCIFormsDisableEmailSending;
 		global $wgEnableEmail;
 		global $wgCIFormsSenderEmail;
-
-		if ( !$wgEnableEmail ) {
-			return $this->exit( $out, $this->msg( 'ci-forms-email-not-enabled' ) );
-		}
 
 		if ( CIForms::isCaptchaEnabled() ) {
 			list( $result, $message, $captcha_message ) =
@@ -77,6 +65,17 @@ class CIFormsSubmit extends SpecialPage {
 		}
 
 		$form_result = $this->parseForm( $post );
+
+		if ( empty( $form_result['form_values'] ) ) {
+			return $this->exit( $out, "no submission data" );
+		}
+
+		$row_inserted = $this->storeSubmission( $form_result );
+
+		if ( !$wgEnableEmail || $wgCIFormsDisableEmailSending || !class_exists( 'PHPMailer\PHPMailer\PHPMailer' ) || !class_exists( 'Dompdf\Dompdf' ) ) {
+			return $this->exit( $out, $this->exit_message( $form_result, $row_inserted, false ) );
+		}
+
 		global $wgCIFormsSubmitEmail;
 		$submit = [];
 
@@ -89,7 +88,7 @@ class CIFormsSubmit extends SpecialPage {
 		}
 
 		if ( empty( $submit ) ) {
-			return $this->exit( $out, $this->msg( 'ci-forms-recipient-not-found' ) );
+			return $this->exit( $out, $this->exit_message( $form_result, $row_inserted, false ) );
 		}
 
 		$submit_valid = [];
@@ -101,62 +100,14 @@ class CIFormsSubmit extends SpecialPage {
 		}
 
 		if ( !count( $submit_valid ) ) {
-			return $this->exit( $out, $this->msg( 'ci-forms-recipient-invalid' ) );
+			return $this->exit( $out, $this->exit_message( $form_result, $row_inserted, false ) );
 		}
 
 		$subject = $this->msg( 'ci-forms-email-subject', $form_result['form_values']['title'] );
-
 		$message_body =
 			$this->msg( 'ci-forms-email-content', $form_result['form_values']['title'],
 				$form_result['form_values']['pagename'] );
-
-		$protocol =
-			( !empty( $_SERVER['HTTPS'] ) && $_SERVER['HTTPS'] !== 'off' ||
-				$_SERVER['SERVER_PORT'] == 443 ) ? "https://" : "http://";
-
-		$css_url =
-			$protocol . $_SERVER['HTTP_HOST'] . $wgResourceBasePath .
-			'/extensions/CIForms/resources/style.css';
-
-		// phpcs:ignore MediaWiki.VariableAnalysis.UnusedGlobalVariables.UnusedGlobal$wgResourceBasePath
-		global $wgResourceBasePath;
-
-		$form_output_html = '';
-		$form_output_html .= '<html><head>';
-		$form_output_html .= '<meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>';
-		// $form_output_html .= '<link rel="stylesheet" type="text/css" href="' . $css_url . '" />';
-
-		$form_output_html .= '<style>';
-		$form_output_html .= file_get_contents( $css_url );
-		$form_output_html .= '</style>';
-
-		$form_output_html .= '<head><body>';
-
-		$form_output_html .= $this->create_output(
-			$form_result['form_values'],
-			$form_result['sections']
-		);
-
-		$form_output_html .= '<br><br><br><br><br>';
-		$form_output_html .= $this->msg( 'ci-forms-credits' );
-		$form_output_html .= '</body></html>';
-
-		// create pdf
-		// https://github.com/dompdf/dompdf
-
-		// instantiate and use the dompdf class
-		$dompdf = new Dompdf();
-		$dompdf->loadHtml( $form_output_html );
-
-		// (Optional) Setup the paper size and orientation
-		$dompdf->setPaper( 'A4' );
-
-		// Render the HTML as PDF
-		$dompdf->render();
-
-		// Output the generated PDF to Browser
-		// $dompdf->stream();
-		$attachment = $dompdf->output();
+		$attachment = $this->createPDF( $form_result );
 
 		// https://github.com/PHPMailer/PHPMailer/blob/master/examples/sendmail.phps
 
@@ -182,17 +133,7 @@ class CIFormsSubmit extends SpecialPage {
 		$message = null;
 
 		if ( !$result_success ) {
-			global $wgCIFormsErrorMessage;
-
-			if ( !empty( $form_result['form_values']['error-message'] ) ) {
-				$message = $form_result['form_values']['error-message'];
-			} else {
-				if ( !empty( $wgCIFormsErrorMessage ) ) {
-					$message = $wgCIFormsErrorMessage;
-				} else {
-					$message = $this->msg( 'ci-forms-dispatch-error', $wgCIFormsSenderEmail );
-				}
-			}
+			return $this->exit( $out, $this->exit_message( $form_result, $row_inserted, true ) );
 		} else {
 			global $wgCIFormsSuccessMessage;
 
@@ -207,6 +148,146 @@ class CIFormsSubmit extends SpecialPage {
 			}
 		}
 		return $this->exit( $out, $message );
+	}
+
+	/**
+	 * @param array $form_result
+	 * @return bool
+	 */
+	private function storeSubmission( $form_result ) {
+		$update_obj = [
+			'title' => $form_result['form_values']['title'],
+			'page_id' => $form_result['form_values']['pageid'],
+			'data' => json_encode( $form_result ),
+			'created_at' => date( 'Y-m-d H:i:s' )
+		];
+
+		$dbr = wfGetDB( DB_MASTER );
+
+		$row_inserted = $dbr->insert(
+			'CIForms_submissions',
+			$update_obj
+		);
+
+		// store submissions groups
+		if ( !empty( $form_result['form_values']['submission-groups'] ) ) {
+			$groups = preg_split( "/[\s,]+/", $form_result['form_values']['submission-groups'] );
+
+			if ( ( $key = array_search( '*', $groups ) ) !== false ) {
+				// @phan-suppress-next-line PhanUndeclaredVariableDim
+				$user_groups[$key] = 'all';
+			}
+
+			if ( in_array( 'all', $groups ) ) {
+				$groups = [ 'all' ];
+			}
+
+			// a sysop can access all data, so we don't save usergroups related
+			// to the submissions
+			if ( $groups !== [ 'sysop' ] ) {
+				$latest_id = $dbr->selectField(
+					'CIForms_submissions',
+					'id',
+					[],
+					__METHOD__,
+					[ 'ORDER BY' => 'id DESC' ]
+				);
+
+				foreach ( $groups as $value ) {
+					$row_inserted_ = $dbr->insert(
+						'CIForms_submissions_groups',
+						[
+							'submission_id' => $latest_id,
+							'usergroup' => $value,
+							'created_at' => date( 'Y-m-d H:i:s' )
+						]
+					);
+				}
+			}
+		}
+		return $row_inserted;
+	}
+
+	/**
+	 * @param array $form_result
+	 * @param bool $row_inserted
+	 * @param bool $dispatch
+	 * @return Message
+	 */
+	protected function exit_message( $form_result, $row_inserted, $dispatch ) {
+		global $wgCIFormsSenderEmail;
+		global $wgCIFormsErrorMessage;
+
+		if ( $row_inserted ) {
+			return $this->msg( 'ci-forms-data-saved' );
+		}
+
+		if ( !empty( $form_result['form_values']['error-message'] ) ) {
+			return $form_result['form_values']['error-message'];
+		}
+
+		if ( !empty( $wgCIFormsErrorMessage ) ) {
+			return $wgCIFormsErrorMessage;
+		}
+
+		if ( !$dispatch ) {
+			if ( !empty( $wgCIFormsSenderEmail ) ) {
+				return $this->msg( 'ci-forms-data-not-saved-contact', $wgCIFormsSenderEmail );
+			}
+			return $this->msg( 'ci-forms-data-not-saved' );
+		}
+
+		if ( !empty( $wgCIFormsSenderEmail ) ) {
+			return $this->msg( 'ci-forms-dispatch-error-contact', $wgCIFormsSenderEmail );
+		}
+		return $this->msg( 'ci-forms-dispatch-error' );
+	}
+
+	/**
+	 * @param array $form_result
+	 * @return string
+	 */
+	public function createPDF( $form_result ) {
+		$css_path = __DIR__ . '/../../resources/style.css';
+
+		$form_output_html = '';
+		$form_output_html .= '<html><head>';
+		$form_output_html .= '<meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>';
+		// $form_output_html .= '<link rel="stylesheet" type="text/css" href="' . $css_url . '" />';
+
+		$form_output_html .= '<style>';
+		$form_output_html .= file_get_contents( $css_path );
+
+		// https://github.com/dompdf/dompdf/issues/708
+		$form_output_html .= '.ci_form ol li::before, .ci_form ul li::before { content: ""; }';
+		$form_output_html .= '</style>';
+		$form_output_html .= '<head><body>';
+		$form_output_html .= $this->create_output(
+			$form_result['form_values'],
+			$form_result['sections']
+		);
+		$form_output_html .= '<br /><br /><br /><br /><br />';
+		$form_output_html .= $this->msg( 'ci-forms-credits' );
+		$form_output_html .= '</body></html>';
+
+		// create pdf
+		// https://github.com/dompdf/dompdf
+
+		// instantiate and use the dompdf class
+		$dompdf = new Dompdf();
+		$dompdf->loadHtml( $form_output_html );
+
+		// (Optional) Setup the paper size and orientation
+		$dompdf->setPaper( 'A4' );
+
+		// Render the HTML as PDF
+		$dompdf->render();
+
+		// Output the generated PDF to Browser
+		// $dompdf->stream();
+		$file = $dompdf->output();
+
+		return $file;
 	}
 
 	/**
@@ -254,7 +335,6 @@ class CIFormsSubmit extends SpecialPage {
 		if ( $response['success'] == true && $response['score'] <= 0.5 ) {
 			return [ false, 'ci-forms-recaptcha-negative-score' ];
 		}
-
 		return [ true ];
 	}
 
@@ -268,7 +348,6 @@ class CIFormsSubmit extends SpecialPage {
 		// $values = [];
 		$inputs = [];
 		$form_values = [];
-
 		$exclude = [ 'form', 'g-recaptcha-response', 'radio-for-required-checkboxes' ];
 
 		foreach ( $post as $i => $value ) {
@@ -297,22 +376,18 @@ class CIFormsSubmit extends SpecialPage {
 				case 'section':
 					$props[$section][$b] = $value;
 					break;
-
 				case 'items':
 					if ( $c === 'label' ) {
 						$labels[$section][$b] = $value;
 					}
-
 					// checkboxes
-					if ( $c === 'selected' && $value !== null && $value !== '' ) {
+					if ( $c === 'selected' && $value !== '' ) {
 						$selected[$section][$b] = true;
 					}
-
 					// radio, inputs unique name
-					if ( $b === 'selected' && $value !== null && $value !== '' ) {
+					if ( $b === 'selected' && $value !== '' ) {
 						$selected[$section][$value] = true;
 					}
-
 					if ( $c === 'input' ) {
 						if ( !array_key_exists( $b, $inputs[$section] ) ) {
 							$inputs[$section][$b] = [];
@@ -337,7 +412,6 @@ class CIFormsSubmit extends SpecialPage {
 				];
 			}
 			$sections[] = $obj;
-
 		}
 		return [ 'form_values' => $form_values, 'sections' => $sections ];
 	}
@@ -348,22 +422,7 @@ class CIFormsSubmit extends SpecialPage {
 	 * @return string
 	 */
 	protected function create_output( $form_values, $sections ) {
-		$ordered_styles = [
-			'decimal',
-			'decimal-leading-zero',
-			'lower-roman',
-			'upper-roman',
-			'lower-greek',
-			'lower-latin',
-			'upper-latin',
-			'armenian',
-			'georgian',
-			'lower-alpha',
-			'upper-alpha',
-		];
-
-		$output = '';
-		$output .= '<div class="ci_form" style="max-width:none;background:none">';
+		$output = '<div class="ci_form pdf" style="max-width:none;background:none">';
 		$output .= '<div class="ci_form_container">';
 
 		if ( !empty( $form_values['title'] ) ) {
@@ -388,21 +447,17 @@ class CIFormsSubmit extends SpecialPage {
 			switch ( $section['type'] ) {
 				case 'inputs':
 				case 'inputs responsive':
-					// @todo make uniform to the ci_form_section_process
-					// to allow multiple inputs on the same row
-
+					// @todo make uniform to the function "ci_form_section_process"
 					foreach ( $section['items'] as $value ) {
 						$required = false;
 						$placeholder = null;
-
 						$label =
 							trim( preg_replace_callback( '/\[\s*([^\[\]]*)\s*\]\s*(\*)?/',
 								static function ( $matches ) use ( &$required, &$placeholder ) {
 									$required = !empty( $matches[2] );
 
-									list( $input_type, $placeholder ) =
+									list( $input_type, $placeholder, $input_options ) =
 										CIForms::ci_form_parse_input_symbol( $matches[1] );
-
 									return '';
 								}, $value['label'] ) );
 
@@ -411,7 +466,6 @@ class CIFormsSubmit extends SpecialPage {
 						}
 
 						$output .= '<div class="ci_form_section_inputs_row">';
-
 						$output .= '<div class="ci_form_section_inputs_col' .
 							( $section['type'] == 'inputs responsive' ? '-25' : '' ) . '">';
 
@@ -432,27 +486,18 @@ class CIFormsSubmit extends SpecialPage {
 						$output .= '</div>';
 					}
 					break;
-
 				case 'multiple choice':
-					$list_type_ordered = in_array( $section['list-style'], $ordered_styles );
-
-					if ( !$list_type_ordered ) {
-						$output .= '<ul class="ci_form_section_multiple_choice_list" style="list-style:' .
-							$section['list-style'] . '">';
-					} else {
-						$output .= '<ol class="ci_form_section_multiple_choice_list" style="list-style-type:' .
-							$section['list-style'] . '">';
-					}
+					$list_type_ordered = in_array( $section['list-style'], CIForms::$ordered_styles );
+					// --list_style_type
+					$output .= '<' . ( !$list_type_ordered ? 'ul' : 'ol' ) . ' class="ci_form_section_multiple_choice_list" style="list-style:' . $section['list-style'] . '">';
 
 					foreach ( $section['items'] as $value ) {
 						$label = $value['label'];
 						$ii = -1;
 						$output .= '<li>';
-
 						// @see https://stackoverflow.com/questions/35200674/special-character-not-showing-in-html2pdf
 						$output .= '<span style="font-family:DejaVu Sans">' .
 							( $value['selected'] ? '&#9745;' : '&#9744;' ) . '</span>&nbsp;';
-
 						$label =
 							preg_replace_callback( '/\[([^\[\]]*)\]\s*\*?/',
 								static function ( $matches ) use ( $value, &$ii ) {
@@ -460,15 +505,16 @@ class CIFormsSubmit extends SpecialPage {
 									return '<span class="input">' .
 										htmlspecialchars( $value['inputs'][$ii] ) . '</span>';
 								}, $label );
-
 						$output .= $label;
 						$output .= '</li>';
 					}
 					$output .= ( $list_type_ordered ? '</ol>' : '</ul>' );
 					break;
-
 				case 'cloze test':
 					$output .= '<ol class="ci_form_section_cloze_test_list">';
+					$list_type_ordered = in_array( $section['list-style'], CIForms::$ordered_styles );
+					// --list_style_type
+					$output .= '<' . ( !$list_type_ordered ? 'ul' : 'ol' ) . ' class="ci_form_section_cloze_test_list" style="list-style:' . $section['list-style'] . '">';
 
 					foreach ( $section['items'] as $value ) {
 						$label = trim( $value['label'] );
@@ -480,47 +526,23 @@ class CIFormsSubmit extends SpecialPage {
 
 						$output .= '<li class="ci_form_section_cloze_test_list_question' .
 							( $example ? '_example' : '' ) . '">';
-
 						$i = 0;
-
 						$output .= preg_replace_callback( '/\[\s*([^\[\]]*)\s*\]\s*\*?/',
 							static function ( $matches ) use ( &$i, $value, $section, $example ) {
-								$inline_suggestion = null;
-								$inline_answer = null;
-
+									$a = $b = null;
 								if ( !empty( $matches[1] ) ) {
-									$inline_suggestion = strtolower( $matches[1] );
-
-									if ( $inline_suggestion ) {
-										preg_match( '/^\s*(.+?)\s*=\s*(.+?)\s*$/',
-											$inline_suggestion, $match_ );
-
-										if ( !empty( $match_[1] ) ) {
-											$inline_suggestion = strtolower( $match_[1] );
-
-											if ( !empty( $match_[2] ) ) {
-												$inline_answer = strtolower( $match_[2] );
-											}
-										}
-									}
+									list( $a, $b ) = preg_split( "/\s*=\s*/", $matches[1] ) + [ null, null ];
 								}
-
 								$replacement_inner = '';
 
-								if ( $inline_suggestion ) {
-									// phpcs:ignore Generic.Files.LineLength.TooLong
-									$replacement_inner .= '<span class="ci_form_section_cloze_test_section_list_question_suggestion">(' .
-										$inline_suggestion . ')</span> ';
-								}
-
-								if ( $example ) {
-									// phpcs:ignore Generic.Files.LineLength.TooLong
+								if ( $a || $b ) {
 									$replacement_inner .= '<span class="ci_form_section_cloze_test_list_question_answered">' .
-										( $inline_answer ?: $inline_suggestion ) .
+										( $b ?: $a ) .
 										'</span> ';
 								} else {
+									// '_value' is appended for easy validation
 									$replacement_inner .= '<span class="input">' .
-										htmlspecialchars( $value['inputs'][$i] ) . '</span>';
+										htmlspecialchars( $value['inputs'][$i] ) . '</span> ';
 								}
 								$i++;
 								return $replacement_inner;

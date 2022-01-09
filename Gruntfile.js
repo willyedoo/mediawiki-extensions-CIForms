@@ -15,6 +15,7 @@ module.exports = function ( grunt ) {
 			},
 			all: [
 				'**/*.js{,on}',
+				'!resources/select2/**',
 				'!node_modules/**',
 				'!vendor/**'
 			]
@@ -22,6 +23,7 @@ module.exports = function ( grunt ) {
 		stylelint: {
 			all: [
 				'**/*.{css,less}',
+				'!resources/select2/**',
 				'!node_modules/**',
 				'!vendor/**'
 			]

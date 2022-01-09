@@ -19,7 +19,7 @@
  * @copyright Copyright © 2021, https://culturaitaliana.org
  */
 
-$( function () {
+$( document ).ready( function () {
 
 	function escape( s ) {
 		return ( String( s ) )
@@ -33,22 +33,21 @@ $( function () {
 	var site_key = mw.config.get( 'ci_forms_google_recaptcha_site_key' );
 
 	mw.loader.getScript( 'https://www.google.com/recaptcha/api.js?render=' + site_key ).then( function () {
-
 		if ( $( 'input[name="g-recaptcha-response"]' ).length ) {
 			grecaptcha.ready( function () {
 				grecaptcha.execute( site_key, { action: 'validate_captcha' } ).then( function ( token ) {
 					$( 'input[name="g-recaptcha-response"]' ).val( token );
 
-				} ).catch( function ( error ) {} );
+				} ).catch( function ( error ) {
+				} );
 			} );
 		}
-	},
-	function ( e ) {
+
+	}, function ( e ) {
 		mw.log.error( e.message );
 	} );
 
 	$( '.ci_form li' ).each( function ( index ) {
-
 		var el = this;
 		var section_el = $( this ).closest( '.ci_form_section' );
 		var radioForCheckboxes = $( section_el ).find( '.radio_for_required_checkboxes' ).first();
@@ -80,17 +79,41 @@ $( function () {
 				alert( 'maximum ' + max_answers + ' choices' );
 				return false;
 			}
-
 			radioForCheckboxes[ 0 ].checked = ( !!count );
-
 		} );
+	} );
+
+	// https://stackoverflow.com/questions/15031513/jquery-help-to-enforce-maxlength-on-textarea
+	$( '.ci_form textarea[maxlength]' ).keyup( function () {
+		var limit = parseInt( $( this ).attr( 'maxlength' ) );
+		var text = $( this ).val();
+		var chars = text.length;
+
+		$( this ).parents().each( function () {
+			var span = $( this ).find( '.ci_form_section_inputs_textarea_maxlength' ).first();
+
+			if ( span.length ) {
+				span.html( chars + '/' + limit + ' characters' );
+			}
+		} );
+
+		if ( chars > limit ) {
+			var new_text = text.slice( 0, Math.max( 0, limit ) );
+			$( this ).val( new_text );
+		}
+	} );
+
+	$( '.ci_form select' ).each( function () {
+		if ( $( this ).find( 'option' ).length > 20 ) {
+			$( this ).select2();
+		}
 
 	} );
 
 	// we cannot use form on submit because
 	// is triggered after the native validation
 
-	$( this ).find( 'input[type=radio]' ).on( 'click', function () {
+	$( '.ci_form input[type=radio]' ).on( 'click', function () {
 		var section_el = $( this ).closest( '.ci_form_section' );
 
 		$( section_el ).find( 'li' ).each( function () {
@@ -103,12 +126,10 @@ $( function () {
 			$( this ).find( 'input[type=radio][name$=_selected]:not(:checked)' ).each( function () {
 				$( el ).find( 'input[type=text]' ).prop( 'required', false );
 			} );
-
 		} );
-
 	} );
 
-	$( this ).find( 'input[type=checkbox]' ).on( 'click', function () {
+	$( '.ci_form input[type=checkbox]' ).on( 'click', function () {
 		var section_el = $( this ).closest( '.ci_form_section' );
 
 		$( section_el ).find( 'li' ).each( function () {
@@ -121,9 +142,7 @@ $( function () {
 			$( this ).find( 'input[type=checkbox][name$=_selected]:not(:checked)' ).each( function () {
 				$( el ).find( 'input[type=text]' ).prop( 'required', false );
 			} );
-
 		} );
-
 	} );
 
 	// cloze test,
@@ -149,7 +168,6 @@ $( function () {
 				if ( val !== '' && val !== null ) {
 					submitted++;
 				}
-
 				inputs++;
 			} );
 
@@ -160,9 +178,6 @@ $( function () {
 				alert( 'Please enter at least ' + min + ' answers for the question "' + escape( question_name ) + '"' );
 				return false;
 			}
-
 		} );
-
 	} );
-
 } );

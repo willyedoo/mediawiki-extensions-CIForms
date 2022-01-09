@@ -1,5 +1,4 @@
 <?php
-
 /**
  * This file is part of the MediaWiki extension CIForms.
  *
@@ -19,13 +18,27 @@
  * @file
  * @ingroup extensions
  * @author thomas-topway-it <thomas.topway.it@mail.com>
- * @copyright Copyright © 2021, https://wikispgere.org
+ * @copyright Copyright © 2021-2022, https://wikisphere.org
  */
 
 class CIForms {
-
 	/** @var bool */
 	protected static $loadModule = false;
+
+	/** @var array */
+	public static $ordered_styles = [
+		'decimal',
+		'decimal-leading-zero',
+		'lower-roman',
+		'upper-roman',
+		'lower-greek',
+		'lower-latin',
+		'upper-latin',
+		'armenian',
+		'georgian',
+		'lower-alpha',
+		'upper-alpha',
+	];
 
 	/**
 	 * Register any render callbacks with the parser
@@ -33,10 +46,7 @@ class CIForms {
 	 * @param Parser $parser
 	 */
 	public static function onParserFirstCallInit( Parser $parser ) {
-		$parser->setFunctionHook( 'ci form', [ self::class, 'ci_form' ] ); // ,SFH_OBJECT_ARGS
-		$parser->setFunctionHook( 'ci_form', [ self::class, 'ci_form' ] ); // ,SFH_OBJECT_ARGS
-
-		$parser->setFunctionHook( 'ci form section', [ self::class, 'ci_form_section' ] );
+		$parser->setFunctionHook( 'ci_form', [ self::class, 'ci_form' ] );
 		$parser->setFunctionHook( 'ci_form_section', [ self::class, 'ci_form_section' ] );
 	}
 
@@ -63,11 +73,54 @@ class CIForms {
 					'<style>.grecaptcha-badge { visibility: hidden; display: none; }</style>' );
 			}
 
-			$css =
-				'<link rel="stylesheet" href="' . $wgResourceBasePath .
-				'/extensions/CIForms/resources/style.css" />';
+			$items = [
+				[ 'stylesheet', $wgResourceBasePath . '/extensions/CIForms/resources/style.css' ],
+			];
 
-			$outputPage->addHeadItem( 'ci_forms_css', $css );
+			foreach ( $items as $key => $val ) {
+				list( $type, $url ) = $val;
+
+				switch ( $type ) {
+					case 'stylesheet':
+						$item = '<link rel="stylesheet" href="' . $url . '" />';
+						break;
+					case 'script':
+						$item = '<script src="' . $url . '"></script>';
+						break;
+
+				}
+				// @phan-suppress-next-line PhanTypeMismatchArgumentNullable
+				$outputPage->addHeadItem( 'CI_head_item_' . $key, $item );
+			}
+		}
+	}
+
+	/**
+	 * @param DatabaseUpdater|null $updater
+	 */
+	public static function onLoadExtensionSchemaUpdates( DatabaseUpdater $updater = null ) {
+		$base = __DIR__;
+
+		$array = [
+			[
+				'table' => 'CIForms_submissions',
+				'filename' => '../sql/CIForms_submissions.sql'
+			],
+			[
+				'table' => 'CIForms_submissions_groups',
+				'filename' => '../sql/CIForms_submissions_groups.sql'
+			],
+		];
+
+		if ( $updater->getDB()->getType() == 'mysql' ) {
+			foreach ( $array as $value ) {
+				$updater->addExtensionUpdate(
+					[
+						'addTable', $value['table'],
+						$base . '/' . $value['filename'], true
+					]
+				);
+			}
 		}
 	}
 
@@ -95,13 +148,15 @@ class CIForms {
 		// phpcs:ignore MediaWiki.VariableAnalysis.UnusedGlobalVariables.UnusedGlobal$wgCIFormsErrorMessage
 		global $wgCIFormsErrorMessage;
 		global $wgCIFormsSubmitEmail;
+		global $wgCIFormsSubmissionGroups;
 
 		$named_parameters = [
 			'submit' => $wgCIFormsSubmitEmail,
 			'title' => null,
+			'submission groups' => $wgCIFormsSubmissionGroups,
 			'success message' => null, // $wgCIFormsSuccessMessage,
 			'error message' => null,   // $wgCIFormsErrorMessage
-			'form class' => '',        // $wgCIFormsErrorMessage
+			'css class' => '',        // $wgCIFormsErrorMessage
 
 		]; // email to which submit
 
@@ -126,8 +181,8 @@ class CIForms {
 		$output = '';
 		$url = Title::newFromText( 'Special:CIFormsSubmit' )->getLocalURL();
 
-		$output .= '<form class="ci_form' . ( !empty( $named_parameters['form class'] ) ? " " .
-				htmlspecialchars( $named_parameters['form class'] ) : '' ) . '" action="' . $url .
+		$output .= '<form class="ci_form' . ( !empty( $named_parameters['css class'] ) ? " " .
+				htmlspecialchars( $named_parameters['css class'] ) : '' ) . '" action="' . $url .
 			'" method="post">';
 		$output .= '<div class="ci_form_container">';
 
@@ -156,14 +211,13 @@ class CIForms {
 
 		$output .= '</div>';
 		$output .= '<div class="ci_form_section_submit">';
-		$output .= '<input type="hidden" name="form_title" value="' .
-			htmlspecialchars( $named_parameters['title'] ) . '">';
-		$output .= '<input type="hidden" name="form_submit" value="' .
-			htmlspecialchars( $named_parameters['submit'] ) . '">';
-		$output .= '<input type="hidden" name="form_success-message" value="' .
-			htmlspecialchars( $named_parameters['success message'] ) . '">';
-		$output .= '<input type="hidden" name="form_error-message" value="' .
-			htmlspecialchars( $named_parameters['error message'] ) . '">';
+
+		$hidden_fields = [ 'title', 'submission groups', 'submit', 'success message', 'error message' ];
+
+		foreach ( $hidden_fields as $value ) {
+			$output .= '<input type="hidden" name="form_' . str_replace( ' ', '-', $value ) . '" value="' .
+				htmlspecialchars( $named_parameters[$value] ) . '">';
+		}
 
 		if ( self::isCaptchaEnabled() ) {
 			$output .= '<input type="hidden" name="g-recaptcha-response">';
@@ -173,13 +227,15 @@ class CIForms {
 
 		$output .= '<input type="hidden" name="form_pagename" value="' .
 			htmlspecialchars( $title->getText() ) . '">';
+		$output .= '<input type="hidden" name="form_pageid" value="' .
+			htmlspecialchars( $title->getArticleID() ) . '">';
+
 		$output .= '<input class="ci_form_input_submit" type="submit" value="Submit">';
 		$output .= '</div>';
 		$output .= '</div>';
 		$output .= '<div class="ci_form_section_captcha">';
 
 		if ( self::isCaptchaEnabled() ) {
-			// phpcs:ignore Generic.Files.LineLength.TooLong
 			$output .= 'form protected using <a target="_blank" style="color:silver;text-decoration:" href="https://www.google.com/recaptcha/about/">Google recaptcha</a>';
 		}
 
@@ -317,8 +373,8 @@ class CIForms {
 			$named_parameters['type'] == 'cloze test' ) {
 			$named_parameters['list-type'] = 'ordered';
 		}
-		$unique_id = uniqid();
 
+		$unique_id = uniqid();
 		$output .= '<div class="ci_form_section ' .
 			htmlspecialchars( str_replace( ' ', '_', $named_parameters['type'] ) ) . '" data-id="' .
 			$unique_id . '">';
@@ -326,21 +382,7 @@ class CIForms {
 		switch ( $named_parameters['type'] ) {
 			case 'cloze test':
 			case 'multiple choice':
-				$ordered_styles = [
-					'decimal',
-					'decimal-leading-zero',
-					'lower-roman',
-					'upper-roman',
-					'lower-greek',
-					'lower-latin',
-					'upper-latin',
-					'armenian',
-					'georgian',
-					'lower-alpha',
-					'upper-alpha',
-				];
-
-				if ( in_array( $named_parameters['list-type'], $ordered_styles ) ) {
+				if ( in_array( $named_parameters['list-type'], self::$ordered_styles ) ) {
 					$list_style = $named_parameters['list-type'];
 				} else {
 					switch ( $named_parameters['list-type'] ) {
@@ -362,7 +404,7 @@ class CIForms {
 
 				$output .= '<input type="hidden" name="' . $unique_id .
 					'_section_list-style" value="' .
-					htmlspecialchars( $named_parameters['list-type'] ) . '">';
+					htmlspecialchars( $list_style ) . '">';
 
 				if ( $named_parameters['type'] == 'multiple choice' ) {
 					$output .= '<input type="hidden" name="' . $unique_id .
@@ -404,15 +446,15 @@ class CIForms {
 						'_label" value="' . htmlspecialchars( $value ) . '" />';
 
 					$i = 0;
-					$output .= preg_replace_callback( '/([^\[\]]*)\[([^\[\]]*)\]\s*(\*)?/',
+					$output .= preg_replace_callback( '/([^\[\]]*)\[\s*([^\[\]]*)\s*\]\s*(\*)?/',
 						function ( $matches ) use ( $named_parameters, &$i, $n, $unique_id ) {
 							// @todo redesign to allow more than 1 input per line
 							if ( $i > 0 ) {
 								return $matches[0];
 							}
-							$label = $matches[1];
+							$label = trim( $matches[1] );
 
-							list( $input_type, $placeholder ) =
+							list( $input_type, $placeholder, $input_options ) =
 								self::ci_form_parse_input_symbol( $matches[2] );
 
 							$required =
@@ -439,10 +481,57 @@ class CIForms {
 									// '_value' is appended for easy validation
 									$replacement .= '<textarea rows="4" name="' . $unique_id .
 										'_items_' . $n . '_input_' . $i . '_value"' .
+										( $input_options && is_numeric( $input_options ) ? ' maxlength="' . $input_options . '"' : '' ) .
 										( $placeholder ? ' placeholder="' .
 											htmlspecialchars( $placeholder ) . '"' : '' ) .
-										$required . '></textarea>';
+										$required . '></textarea>' .
+										( $input_options && is_numeric( $input_options ) ? '<span class="ci_form_section_inputs_textarea_maxlength">0/' . $input_options . ' characters</span>' : '' );
 									break;
+
+								case 'select':
+									// *** this could be replaced with any symbol
+									// not allowed in the input descriptor
+
+									// $placeholder can be: a,b, c, or a:x,b:y, c:z, or: a:x\, a, b:y (comma
+									// can be escaped
+
+									$id_tmp = uniqid();
+
+									$select_options = str_replace( '\\,', $id_tmp, $input_options );
+									$select_options = preg_split( "/\s*,\s*/", $select_options );
+
+									$replacement .= '<select name="' . $unique_id . '_items_' . $n .
+										'_input_' . $i . '_value" type="' . $input_type . '"' .
+										( $placeholder ? ' placeholder="' .
+											htmlspecialchars( $placeholder ) . '"' : '' ) .
+										$required . '>';
+
+									if ( $placeholder ) {
+										$replacement .= '<option value="" disabled selected>' . $placeholder . '</option>';
+									}
+
+									$replacement .= implode( array_map(
+										static function ( $val ) use ( $id_tmp ) {
+											$val = str_replace( $id_tmp, ',', $val );
+
+											// replace with Zero-width space
+											// to ensure select2 renders the character properly
+											if ( empty( $val ) ) {
+												$val = ':&#8203;';
+											}
+
+											if ( strpos( $val, ':' ) === false ) {
+												return '<option>' . $val . '</option>';
+											}
+
+											list( $value, $label ) = preg_split( "/\s*:\s*/", $val );
+
+											return '<option value="' . htmlspecialchars( $value ) . '">' . $label . '</option>';
+										}, $select_options ) );
+
+									$replacement .= '</select>';
+									break;
+
 								default:
 								case 'text':
 								case 'email':
@@ -464,17 +553,11 @@ class CIForms {
 				}
 				break;
 			case 'multiple choice':
-				$list_type_ordered = in_array( $list_style, $ordered_styles );
+				$list_type_ordered = in_array( $list_style, self::$ordered_styles );
 
 				// https://stackoverflow.com/questions/23699128/how-can-i-reset-a-css-counter-to-the-start-attribute-of-the-given-list
 
-				if ( !$list_type_ordered ) {
-					$output .= '<ul class="ci_form_section_multiple_choice_list" style="--list_style_type:' .
-						$list_style . '">';
-				} else {
-					$output .= '<ol class="ci_form_section_multiple_choice_list" style="--list_style_type:' .
-						$list_style . '">';
-				}
+				$output .= '<' . ( !$list_type_ordered ? 'ul' : 'ol' ) . ' class="ci_form_section_multiple_choice_list" style="--list_style_type:' . $list_style . '">';
 				$n = 0;
 
 				// native validation, see the following:
@@ -517,18 +600,14 @@ class CIForms {
 			case 'cloze test':
 				$suggestions = [];
 				if ( !empty( $named_parameters['suggestions'] ) ) {
-					$suggestions = explode( ',', $named_parameters['suggestions'] );
-
-					foreach ( $suggestions as $key => $word ) {
-						$suggestions[$key] = trim( strtolower( $word ) );
-					}
+					$suggestions = preg_split( "/\s*,\s*/", $named_parameters['suggestions'] );
 				}
+
 				$items = [];
 				$answers = [];
 
 				foreach ( $lines as $key => $value ) {
 					$example = false;
-					$inline_answer = null;
 
 					$value = trim( $value );
 					$value = preg_replace( '/\s+/', ' ', $value );
@@ -546,29 +625,30 @@ class CIForms {
 
 					if ( !empty( $matches[0] ) ) {
 						foreach ( $matches[0] as $i => $match ) {
-							$inline_answer = null;
-							$inline_suggestion = strtolower( $matches[1][$i] );
-							if ( $inline_suggestion ) {
-								preg_match( '/^\s*(.+?)\s*=\s*(.+?)\s*$/', $inline_suggestion,
-									$match_ );
+							$a = $b = null;
 
-								if ( !empty( $match_[1] ) ) {
-									$inline_suggestion = strtolower( $match_[1] );
+							if ( $matches[1][$i] ) {
 
-									if ( !empty( $match_[2] ) ) {
-										$inline_answer = strtolower( $match_[2] );
-									}
-								}
+								// the suggestions could be "transformed" regard
+								// a possible answer, for instance:
+								// suggestions: "to be, to do, to make"
+								// example answer in past perfect
+								// I [to be=was] proud to win ...
 
-								if ( $example ) {
-									$answers[] =
-										$inline_suggestion; // ($inline_answer ?? $inline_suggestion);
-								}
+								list( $a, $b ) = preg_split( "/\s*=\s*/", $matches[1][$i] ) + [ null, null ];
+
 							}
-							$inputs[] = [ $inline_suggestion, $inline_answer ];
+
+							$found_suggestion = preg_grep( '/^' . preg_quote( $a ) . '$/i', $suggestions );
+
+							if ( count( $found_suggestion ) ) {
+								$answers[] = array_shift( $found_suggestion );
+							}
+
+							$inputs[] = [ $a, $b ];
+
 						}
 					}
-
 					$items[] = [ $value, $example, $inputs ];
 				}
 
@@ -599,17 +679,11 @@ class CIForms {
 					$output .= '</div>';
 				}
 
-				$list_type_ordered = in_array( $list_style, $ordered_styles );
+				$list_type_ordered = in_array( $list_style, self::$ordered_styles );
 
 				// https://stackoverflow.com/questions/23699128/how-can-i-reset-a-css-counter-to-the-start-attribute-of-the-given-list
 
-				if ( !$list_type_ordered ) {
-					$output .= '<ul class="ci_form_section_cloze_test_list" style="--list_style_type:' .
-						$list_style . '">';
-				} else {
-					$output .= '<ol class="ci_form_section_cloze_test_list" style="--list_style_type:' .
-						$list_style . '">';
-				}
+				$output .= '<' . ( !$list_type_ordered ? 'ul' : 'ol' ) . ' class="ci_form_section_cloze_test_list" style="--list_style_type:' . $list_style . '">';
 				$n = 0;
 
 				foreach ( $items as $value ) {
@@ -626,17 +700,12 @@ class CIForms {
 					$label =
 						preg_replace_callback( '/\[([^\[\]]*)\]/',
 							static function ( $matches ) use ( &$i, &$inputs, $example, $n, $unique_id ) {
-								list( $inline_suggestion, $inline_answer ) = array_shift( $inputs );
+								list( $a, $b ) = array_shift( $inputs );
 								$replacement = '';
 
-								if ( $inline_suggestion ) {
-									// phpcs:ignore Generic.Files.LineLength.TooLong
-									$replacement .= '<span class="ci_form_section_cloze_test_section_list_question_suggestion">(' .
-										$inline_suggestion . ')</span> ';
-								}
-								if ( $example ) {
+								if ( $a || $b ) {
 									$replacement .= '<span class="ci_form_section_cloze_test_list_question_answered">' .
-										( $inline_answer ?: $inline_suggestion ) .
+										( $b ?: $a ) .
 										'</span>';
 								} else {
 									// '_value' is appended for easy validation
@@ -666,11 +735,8 @@ class CIForms {
 	 * @return array
 	 */
 	public static function ci_form_parse_input_symbol( $value ) {
-		$input_type = 'text';
-		$placeholder = null;
-
 		if ( empty( $value ) ) {
-			return [ $input_type, $placeholder ];
+			return [ 'text', null ];
 		}
 
 		// https://quasar.dev/vue-components/input
@@ -688,26 +754,38 @@ class CIForms {
 				'url',
 				'time',
 				'date',
+				'select',
 			];
 
 		// [first name]
 		// [first name=text]
 		// [email]
+		// [email=email]
+		// [select=a,b,c]
+		// [Select option=select=a,b,c]
+		// [textarea=500]
+		// [enter=textarea=500]
+		// [enter text=textarea=500]
 
-		// @phan-suppress-next-line PhanSuspiciousBinaryAddLists
-		list( $a, $b ) = explode( '=', $value ) + [ null, null ];
+		list( $a, $b, $c ) = preg_split( "/\s*=\s*/", $value ) + [ null, null, null ];
 
-		if ( $b ) {
-			$input_type = $b;
-			$placeholder = $a;
-		} else {
-			if ( in_array( $a, $input_types ) ) {
-				$input_type = $a;
-			} else {
-				$placeholder = $a;
-			}
+		if ( $b && $c ) {
+			return [ $b, $a, $c ];
 		}
-		return [ $input_type, $placeholder ];
+
+		if ( in_array( $b, $input_types ) ) {
+			return [ $b, $a, null ];
+		}
+
+		if ( in_array( $a, $input_types ) ) {
+			return [ $a, null, $b ];
+		}
+
+		if ( !$b ) {
+			$b = 'text';
+		}
+
+		return [ $b, $a, null ];
 	}
 
 	/**

@@ -1,5 +1,4 @@
 <?php
-
 /**
  * This file is part of the MediaWiki extension CIForms.
  *
@@ -19,17 +18,11 @@
  * @file
  * @ingroup extensions
  * @author thomas-topway-it <thomas.topway.it@mail.com>
- * @copyright Copyright ©2021, https://culturaitaliana.org
+ * @copyright Copyright ©2021-2022, https://wikisphere.org
  */
-
 $magicWords = [];
 
 $magicWords['en'] = [
-
-	'ci_form_section' => [ 0, 'ci_form_section' ],
-	'ci form section' => [ 0, 'ci form section' ],
-
-	'ci_form' => [ 0, 'ci_form' ],
-	'ci form' => [ 0, 'ci form' ],
-
+	'ci_form_section' => [ 0, 'ci_form_section', 'ci form section' ],
+	'ci_form' => [ 0, 'ci_form', 'ci form' ]
 ];

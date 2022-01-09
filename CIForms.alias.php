@@ -12,4 +12,5 @@ $specialPageAliases = [];
  */
 $specialPageAliases['en'] = [
 	'CIFormsSubmit' => [ 'CIFormsSubmit' ],
+	'CIFormsManage' => [ 'CIFormsManage' ],
 ];

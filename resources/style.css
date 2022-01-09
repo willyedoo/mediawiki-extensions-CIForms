@@ -3,7 +3,7 @@
 }
 
 .ci_text_highlight {
-	color: #00ff;
+	color: #00f;
 	background: #f5f5f5;
 }
 
@@ -57,6 +57,11 @@
 	min-width: 6em;
 }
 
+.ci_form_section_multiple_choice_list input[ type='checkbox' ],
+.ci_form_section_multiple_choice_list input[ type='radio' ] {
+	margin: 3px 3px 3px 4px;
+}
+
 .ci_form_section_cloze_test_list_question .input,
 .ci_form_section_multiple_choice_list .input {
 	background: #f5f5f5;
@@ -71,13 +76,15 @@
 .ci_form_section_inputs_row input,
 .ci_form_section_inputs_row select,
 .ci_form_section_inputs_row textarea,
-.ci_form_section_inputs_row .input {
+.ci_form_section_inputs_row .input,
+.select2-container--default .select2-selection--single {
 	padding: 8px;
 	background: #fff;
 	border: 1px solid #ccc;
 	display: block;
 	border-radius: 6px;
-	width: calc( 100% - 16px );
+	width: 100%;
+	box-sizing: border-box;
 	resize: vertical;
 }
 
@@ -199,8 +206,8 @@ ol.ci_form_section_cloze_test_list li.ci_form_section_cloze_test_list_question_e
 	margin-right: 0.2em;
 }
 
-.ci_form ol,
-.ci_form ul {
+.ci_form:not( .pdf ) ol,
+.ci_form:not( .pdf ) ul {
 	list-style: none;
 	counter-reset: li;
 }
@@ -242,4 +249,20 @@ ol.ci_form_section_cloze_test_list li.ci_form_section_cloze_test_list_question_e
 	border-bottom: 1px solid #000f;
 	color: #0b5e69;
 	font-weight: bold;
+}
+
+.ci_form_section_inputs_textarea_maxlength {
+	text-align: right;
+	font-size: smaller;
+	color: #808080ff;
+	display: inline-block;
+	width: 100%;
+}
+
+.select2-container--default .select2-selection--single .select2-selection__rendered {
+	line-height: normal;
+}
+
+.select2-container .select2-selection--single {
+	height: auto;
 }

@@ -1,7 +1,12 @@
 # CIForms
 
-This Mediawiki extension allows rapid creation of forms, either standard forms with input fields aimed at receiving data from visitors, or forms with multiple choice questions or even Cloze tests to be used as teaching tools for current students or to engage prospective ones.
+CIForms allows rapid creation of forms, either standard forms with input fields aimed at receiving data from visitors,
+or forms with multiple choice questions or even Cloze tests to administer complex surveys & tests.
 
-All forms include automatic validation, are protected by the latest version of Google recaptcha and have been inspired by this extension at Wikiversity and they diverge from it mainly because the submitted data are sent to the provided email address, rather than used to compute a score.
+All forms include automatic validation, are optionally protected by the latest version of Google recaptcha and have
+been inspired by this extension (https://en.wikiversity.org/wiki/Wikiversity:Main_Page) at Wikiversity and they diverge
+from it mainly because the submitted data are either stored in the database or sent to a provided email address,
+rather than used to compute a score.
 
-Please check https://culturaitaliana.org/wiki/How_it_works/Forms_and_quizzes for working examples.
+Please check https://www.mediawiki.org/wiki/Extension:CIForms for the official documentation.
+
