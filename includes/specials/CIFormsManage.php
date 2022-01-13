@@ -777,7 +777,7 @@ AND title = ' . $dbr->addQuotes( $this->form_title )
 	 * @return string
 	 */
 	protected function getGroupName() {
-		return 'CIForms';
+		return 'ciforms';
 	}
 
 }

@@ -256,7 +256,13 @@ class CIFormsSubmit extends SpecialPage {
 		// $form_output_html .= '<link rel="stylesheet" type="text/css" href="' . $css_url . '" />';
 
 		$form_output_html .= '<style>';
-		$form_output_html .= file_get_contents( $css_path );
+		$stylesheet = file_get_contents( $css_path );
+
+		// ***ensure there aren't spaces between brackets otherwise
+		// Dompdf will not work
+		$stylesheet = preg_replace( '/\[\s*(.+?)\s*\]/', "[$1]", $stylesheet );
+
+		$form_output_html .= $stylesheet;
 
 		// https://github.com/dompdf/dompdf/issues/708
 		$form_output_html .= '.ci_form ol li::before, .ci_form ul li::before { content: ""; }';
