@@ -174,8 +174,7 @@ class CIFormsSubmit extends SpecialPage {
 			$groups = preg_split( "/[\s,]+/", $form_result['form_values']['submission-groups'] );
 
 			if ( ( $key = array_search( '*', $groups ) ) !== false ) {
-				// @phan-suppress-next-line PhanUndeclaredVariableDim
-				$user_groups[$key] = 'all';
+				$groups[$key] = 'all';
 			}
 
 			if ( in_array( 'all', $groups ) ) {
