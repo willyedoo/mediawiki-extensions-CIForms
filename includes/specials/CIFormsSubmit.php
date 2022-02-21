@@ -77,14 +77,15 @@ class CIFormsSubmit extends SpecialPage {
 			if ( $result === false ) {
 				return $this->exit( $out,
 					$this->msg( $message, $captcha_message, $senderEmail )
-					. ( $senderEmail ? "\040" . $this->msg( ' ci-forms-try-again-message', $senderEmail ) : '' ) );
+						. ( $senderEmail ? "\040" . $this->msg( ' ci-forms-try-again-message', $senderEmail ) : '' ),
+					null );
 			}
 		}
 
 		$form_result = $this->parseForm( $post );
 
 		if ( empty( $form_result['form_values'] ) ) {
-			return $this->exit( $out, "no submission data" );
+			return $this->exit( $out, "no submission data", null );
 		}
 
 		$row_inserted = $this->storeSubmission( $form_result );
@@ -100,7 +101,7 @@ class CIFormsSubmit extends SpecialPage {
 		}
 
 		if ( !$wgEnableEmail || empty( $submit_valid ) || !class_exists( 'PHPMailer\PHPMailer\PHPMailer' ) || !class_exists( 'Dompdf\Dompdf' ) ) {
-			return $this->exit( $out, $this->exit_message( $form_result, $row_inserted, false, false ) );
+			return $this->exit( $out, $this->exit_message( $form_result, $row_inserted, false, false ), $form_result['form_values']['pagename'] );
 		}
 
 		$subject = $this->msg( 'ci-forms-email-subject', $form_result['form_values']['title'], $wgSitename );
@@ -148,12 +149,7 @@ class CIFormsSubmit extends SpecialPage {
 			$result_success = false;
 		}
 
-		$out->addWikiMsg(
-			'ci-forms-manage-pager-return',
-			$form_result['form_values']['pagename']
-		);
-
-		$this->exit( $out, $this->exit_message( $form_result, $row_inserted, true, $result_success ) );
+		$this->exit( $out, $this->exit_message( $form_result, $row_inserted, true, $result_success ), $form_result['form_values']['pagename'] );
 	}
 
 	/**
@@ -374,8 +370,16 @@ class CIFormsSubmit extends SpecialPage {
 	/**
 	 * @param OutputPage $out
 	 * @param string $message
+	 * @param string|null $pagename
 	 */
-	protected function exit( $out, $message ): void {
+	protected function exit( $out, $message, $pagename ): void {
+		if ( !empty( $pagename ) ) {
+			$out->addWikiMsg(
+				'ci-forms-manage-pager-return',
+				$pagename
+			);
+		}
+
 		$html = '<p>' . $message . '</p>';
 		$out->addHTML( $html );
 	}
