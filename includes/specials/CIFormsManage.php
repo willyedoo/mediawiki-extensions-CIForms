@@ -21,15 +21,14 @@
  * @copyright Copyright ©2021-2022, https://wikisphere.org
  */
 
-use Wikimedia\Rdbms\IResultWrapper;
-
 include_once __DIR__ . '/PrevNextNavigationRendererCIForms.php';
 
 if ( is_readable( __DIR__ . '/../../vendor/autoload.php' ) ) {
 	include_once __DIR__ . '/../../vendor/autoload.php';
 }
 
-// formatter: https://wtools.io/php-formatter
+use MediaWiki\MediaWikiServices;
+use Wikimedia\Rdbms\IResultWrapper;
 
 class CIFormsManage extends QueryPage {
 	private $form_title;
@@ -67,6 +66,7 @@ class CIFormsManage extends QueryPage {
 
 		$this->form_title = $request->getVal( 'form_title' );
 		$this->page_id = $request->getVal( 'page_id' );
+
 		$this->userGroups = $this->getUserGroups();
 
 		$download = $request->getVal( 'download' );
@@ -328,15 +328,16 @@ submission_id = CIForms_submissions.id AND usergroup IN(' . $userGroups_quoted .
 	 */
 	protected function getUserGroups() {
 		$user = $this->getUser();
-		$user_groups = $user->getImplicitGroups();
-		$user_groups = array_merge( $user_groups, $user->getGroups() );
+		$UserGroupManager = MediaWikiServices::getInstance()->getUserGroupManager();
+		$user_groups = $UserGroupManager->getUserEffectiveGroups( $user );
 		$user_groups[] = $user->getName();
 
-		if ( ( $key = array_search( '*', $user_groups ) ) !== false ) {
-			$user_groups[$key] = 'all';
-		} else {
-			$user_groups[] = 'all';
+		if ( array_search( '*', $user_groups ) === false ) {
+			$user_groups[] = '*';
 		}
+
+		$key = array_search( '*', $user_groups );
+		$user_groups[ $key ] = 'all';
 
 		return $user_groups;
 	}
@@ -406,6 +407,7 @@ submission_id = CIForms_submissions.id AND usergroup IN(' . $userGroups_quoted .
 			// Old-fashioned raw SQL style, deprecated
 			$sql = $this->getSQL();
 			$sql .= ' ORDER BY ' . implode( ', ', $order );
+
 			$sql = $dbr->limitResult( $sql, $limit, $offset );
 			// phpcs:ignore MediaWiki.Usage.DbrQueryUsage.DbrQueryFound
 			$res = $dbr->query( $sql, $fname );
@@ -712,6 +714,13 @@ AND title = ' . $dbr->addQuotes( $this->form_title )
 		$b = 0;
 
 		foreach ( $data['sections'] as $section ) {
+
+			// *** this could be determined by a bug
+			// now solved
+			if ( empty( $section['type'] ) ) {
+				continue;
+			}
+
 			switch ( $section['type'] ) {
 				case 'inputs':
 				case 'inputs responsive':
@@ -721,7 +730,7 @@ AND title = ' . $dbr->addQuotes( $this->form_title )
 						// @phan-suppress-next-line PhanPluginUseReturnValueInternalKnown
 						preg_replace_callback(
 							'/([^\[\]]*)\[([^\[\]]*)\]\s*(\*)?/',
-							static function ( $matches ) use ( $i, $value, &$array ) {
+							static function ( $matches ) use ( &$i, $value, &$array ) {
 								$label = $matches[1];
 								// use input type as label if label is missing
 								if ( empty( $label ) ) {
@@ -730,6 +739,7 @@ AND title = ' . $dbr->addQuotes( $this->form_title )
 									$label = ( $placeholder ?: '<em>' . $input_type . '</em>' );
 								}
 								$array[] = [ trim( $label ), $value['inputs'][$i] ];
+								$i++;
 							},
 							$value['label']
 						);
@@ -744,14 +754,23 @@ AND title = ' . $dbr->addQuotes( $this->form_title )
 							$value_[] = ( $key + 1 ) . ( !empty( $value['inputs'] ) ? ' (' . implode( ' &ndash; ', $value['inputs'] ) . ')' : '' );
 						}
 					}
-					$array[] = [ 'multiple choice #' . $a, implode( '<br/>', $value_ ) ];
+					$array[] = [ 'multiple choice #' . $a, implode( '<br />', $value_ ) ];
 					break;
 				case 'cloze test':
 					$b++;
 					$value_ = [];
 					foreach ( $section['items'] as $key => $value ) {
-						# @todo: parse $value['label'] and omit examples (with form "I (to be) [have been] proud to win the match" )
-						# (there could be more than 1 input per line)
+
+						$label = trim( $value['label'] );
+						$example = ( $label[0] == '*' );
+
+						// ignore the example line since
+						// the numeration isn't handled correctly by
+						// Dompdf using css counter-increment
+						if ( $example ) {
+							continue;
+						}
+
 						$value_[] = '<li>' . ( !empty( $value['inputs'] ) ? implode( ' &ndash; ', $value['inputs'] ) : '' ) . '</li>';
 					}
 					$list_type_ordered = in_array( $section['list-style'], CIForms::$ordered_styles );
@@ -770,7 +789,7 @@ AND title = ' . $dbr->addQuotes( $this->form_title )
 	 * @return array
 	 */
 	public function getOrderFields() {
-		return [ 'created_at' ];
+		return [ ( empty( $this->form_title ) ? 'last_submission_date' : 'created_at' ) ];
 	}
 
 	/**

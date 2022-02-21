@@ -49,9 +49,25 @@ class CIFormsSubmit extends SpecialPage {
 		$post = $_POST;
 		// $request->getArray( 'data' );
 
-		global $wgCIFormsDisableEmailSending;
 		global $wgEnableEmail;
 		global $wgCIFormsSenderEmail;
+		global $wgCIFormsSenderName;
+		global $wgPasswordSenderName;
+		global $wgPasswordSender;
+		global $wgSitename;
+
+		if ( empty( $wgCIFormsSenderEmail ) ) {
+			$senderEmail = $wgPasswordSender;
+			$senderName = $wgPasswordSenderName;
+
+		} else {
+			$senderEmail = $wgCIFormsSenderEmail;
+			$senderName = $wgCIFormsSenderName;
+		}
+
+		if ( !Sanitizer::validateEmail( $senderEmail ) ) {
+			$senderEmail = null;
+		}
 
 		if ( CIForms::isCaptchaEnabled() ) {
 			list( $result, $message, $captcha_message ) =
@@ -60,7 +76,8 @@ class CIFormsSubmit extends SpecialPage {
 			// @phan-suppress-next-line PhanSuspiciousValueComparison
 			if ( $result === false ) {
 				return $this->exit( $out,
-					$this->msg( $message, $captcha_message, $wgCIFormsSenderEmail ) );
+					$this->msg( $message, $captcha_message, $senderEmail )
+					. ( $senderEmail ? "\040" . $this->msg( ' ci-forms-try-again-message', $senderEmail ) : '' ) );
 			}
 		}
 
@@ -72,82 +89,71 @@ class CIFormsSubmit extends SpecialPage {
 
 		$row_inserted = $this->storeSubmission( $form_result );
 
-		if ( !$wgEnableEmail || $wgCIFormsDisableEmailSending || !class_exists( 'PHPMailer\PHPMailer\PHPMailer' ) || !class_exists( 'Dompdf\Dompdf' ) ) {
-			return $this->exit( $out, $this->exit_message( $form_result, $row_inserted, false ) );
-		}
-
-		global $wgCIFormsSubmitEmail;
-		$submit = [];
-
-		if ( !empty( $form_result['form_values']['submit'] ) ) {
-			$submit = explode( ',', $form_result['form_values']['submit'] );
-		} else {
-			if ( !empty( $wgCIFormsSubmitEmail ) ) {
-				$submit = explode( ',', $wgCIFormsSubmitEmail );
-			}
-		}
-
-		if ( empty( $submit ) ) {
-			return $this->exit( $out, $this->exit_message( $form_result, $row_inserted, false ) );
-		}
+		$formSubmit = self::mergeGlobal( 'submit', $form_result['form_values'] );
 
 		$submit_valid = [];
 
-		foreach ( $submit as $email ) {
+		foreach ( $formSubmit as $email ) {
 			if ( Sanitizer::validateEmail( $email ) ) {
 				$submit_valid[] = $email;
 			}
 		}
 
-		if ( !count( $submit_valid ) ) {
-			return $this->exit( $out, $this->exit_message( $form_result, $row_inserted, false ) );
+		if ( !$wgEnableEmail || empty( $submit_valid ) || !class_exists( 'PHPMailer\PHPMailer\PHPMailer' ) || !class_exists( 'Dompdf\Dompdf' ) ) {
+			return $this->exit( $out, $this->exit_message( $form_result, $row_inserted, false, false ) );
 		}
 
-		$subject = $this->msg( 'ci-forms-email-subject', $form_result['form_values']['title'] );
-		$message_body =
-			$this->msg( 'ci-forms-email-content', $form_result['form_values']['title'],
-				$form_result['form_values']['pagename'] );
+		$subject = $this->msg( 'ci-forms-email-subject', $form_result['form_values']['title'], $wgSitename );
+
+		$message_body = $this->msg(
+			'ci-forms-email-content',
+			$form_result['form_values']['title'],
+			Title::newFromText( $form_result['form_values']['pagename'] )->getFullURL()
+		);
+
+		$message_body .= "<br /><br /><br />" . $this->msg( 'ci-forms-credits' );
+
 		$attachment = $this->createPDF( $form_result );
 
 		// https://github.com/PHPMailer/PHPMailer/blob/master/examples/sendmail.phps
 
 		// Create a new PHPMailer instance
-		$mail = new PHPMailer();
+		$mail = new PHPMailer( true );
 
-		// Set PHPMailer to use the sendmail transport
-		$mail->isSendmail();
-		$mail->setFrom( $wgCIFormsSenderEmail );
+		try {
+			$mail->isSendmail();
+			$mail->IsHTML( true );
+			$mail->CharSet = "text/html; charset=UTF-8;";
 
-		foreach ( $submit_valid as $key => $email ) {
-			$mail->addAddress( $email );
-		}
+			$mail->setFrom( ( !empty( $senderName ) ? $senderName . ' <' . $senderEmail . '>' : $senderEmail ) );
 
-		$mail->Subject = $subject;
-		$mail->msgHTML( $message_body );
-		$mail->AltBody = $message_body;
-		// $mail->addAttachment($attachment);
-		$mail->AddStringAttachment( $attachment, $subject, "base64", "application/pdf" );
-
-		$result_success = $mail->send();
-		// echo $mail->ErrorInfo;
-		$message = null;
-
-		if ( !$result_success ) {
-			return $this->exit( $out, $this->exit_message( $form_result, $row_inserted, true ) );
-		} else {
-			global $wgCIFormsSuccessMessage;
-
-			if ( !empty( $form_result['form_values']['success-message'] ) ) {
-				$message = $form_result['form_values']['success-message'];
-			} else {
-				if ( !empty( $wgCIFormsSuccessMessage ) ) {
-					$message = $wgCIFormsSuccessMessage;
-				} else {
-					$message = $this->msg( 'ci-forms-dispatch-success' );
-				}
+			foreach ( $submit_valid as $key => $email ) {
+				$mail->addAddress( $email );
 			}
+
+			$mail->Subject = $subject;
+			$mail->msgHTML( $message_body );
+			// $mail->addAttachment($attachment);
+
+			$filename = $this->msg( 'ci-forms-email-subject', $form_result['form_values']['title'], $wgSitename );
+			$mail->AddStringAttachment( $attachment, $filename . '.pdf', "base64", "application/pdf" );
+			$mail->send();
+
+			$result_success = empty( $mail->ErrorInfo );
+
+		} catch ( Exception $e ) {
+			// echo $e->getMessage();
+			// echo $e->errorMessage();
+			// echo "Mailer Error: " . $mail->ErrorInfo;
+			$result_success = false;
 		}
-		return $this->exit( $out, $message );
+
+		$out->addWikiMsg(
+			'ci-forms-manage-pager-return',
+			$form_result['form_values']['pagename']
+		);
+
+		$this->exit( $out, $this->exit_message( $form_result, $row_inserted, true, $result_success ) );
 	}
 
 	/**
@@ -169,9 +175,11 @@ class CIFormsSubmit extends SpecialPage {
 			$update_obj
 		);
 
+		$SubmissionGroups = self::mergeGlobal( 'submission-groups', $form_result['form_values'] );
+
 		// store submissions groups
-		if ( !empty( $form_result['form_values']['submission-groups'] ) ) {
-			$groups = preg_split( "/[\s,]+/", $form_result['form_values']['submission-groups'] );
+		if ( !empty( $SubmissionGroups ) ) {
+			$groups = $SubmissionGroups;
 
 			if ( ( $key = array_search( '*', $groups ) ) !== false ) {
 				$groups[$key] = 'all';
@@ -181,9 +189,13 @@ class CIFormsSubmit extends SpecialPage {
 				$groups = [ 'all' ];
 			}
 
+			if ( ( $key = array_search( 'sysop', $groups ) ) !== false ) {
+				unset( $groups[$key] );
+			}
+
 			// a sysop can access all data, so we don't save usergroups related
 			// to the submissions
-			if ( $groups !== [ 'sysop' ] ) {
+			if ( !empty( $groups ) ) {
 				$latest_id = $dbr->selectField(
 					'CIForms_submissions',
 					'id',
@@ -208,38 +220,98 @@ class CIFormsSubmit extends SpecialPage {
 	}
 
 	/**
+	 * @param string $name
+	 * @param array $form_result
+	 * @return string|array|null
+	 */
+	protected function mergeGlobal( $name, $form_result ) {
+		$types = [
+			'wgCIFormsSubmissionGroups' => 'array',
+			'wgCIFormsSubmitEmail' => 'array',
+			'wgCIFormsSuccessMessage' => 'string',
+			'wgCIFormsErrorMessage' => 'string',
+		];
+
+		$map = [ 'submission-groups', 'submit', 'success-message', 'error-message' ];
+
+		$keys = array_keys( $types );
+		$key = array_search( $name, $map );
+		$globalName = $keys[$key];
+		$globalMode = $GLOBALS[$globalName . 'GlobalMode'];
+		$local = $form_result[$name];
+
+		// avoid "SecurityCheck-XSS Calling method \CIFormsSubmit::exit() in \CIFormsSubmit::execute that outputs using tainted argument #2."
+		$global = htmlspecialchars( $GLOBALS[$globalName] );
+
+		$output = ( $types[$globalName] == 'array' ? [] : null );
+
+		if ( $globalMode !== CIFORMS_VALUE_IF_NULL || empty( $local ) ) {
+			$output = $global;
+			if ( $types[$globalName] == 'array' && !is_array( $global ) ) {
+				$output = preg_split( "/\s*,\s*/", $output );
+			}
+		}
+
+		if ( $globalMode === CIFORMS_VALUE_OVERRIDE ) {
+			return $output;
+		}
+
+		if ( $types[$globalName] == 'array' ) {
+			$local = preg_split( "/\s*,\s*/", $local );
+		}
+
+		if ( empty( $local ) && $globalMode === CIFORMS_VALUE_IF_NULL ) {
+			return $output;
+		}
+
+		if ( $globalMode === CIFORMS_VALUE_APPEND ) {
+			if ( $types[$globalName] == 'array' ) {
+				$output = array_unique( array_merge( $output, $local ) );
+
+			// *** not clear if it does make sense
+			} else {
+				$output = $local . "\040" . $output;
+			}
+
+			return $output;
+		}
+
+		return $local;
+	}
+
+	/**
 	 * @param array $form_result
 	 * @param bool $row_inserted
 	 * @param bool $dispatch
-	 * @return Message
+	 * @param bool $dispatched
+	 * @return string
 	 */
-	protected function exit_message( $form_result, $row_inserted, $dispatch ) {
-		global $wgCIFormsSenderEmail;
-		global $wgCIFormsErrorMessage;
-
-		if ( $row_inserted ) {
-			return $this->msg( 'ci-forms-data-saved' );
-		}
-
-		if ( !empty( $form_result['form_values']['error-message'] ) ) {
-			return $form_result['form_values']['error-message'];
-		}
-
-		if ( !empty( $wgCIFormsErrorMessage ) ) {
-			return $wgCIFormsErrorMessage;
-		}
+	protected function exit_message( $form_result, $row_inserted, $dispatch, $dispatched ) {
+		$errorMessage = self::mergeGlobal( 'error-message', $form_result['form_values'] );
+		$successMessage = self::mergeGlobal( 'success-message', $form_result['form_values'] );
 
 		if ( !$dispatch ) {
-			if ( !empty( $wgCIFormsSenderEmail ) ) {
-				return $this->msg( 'ci-forms-data-not-saved-contact', $wgCIFormsSenderEmail );
+			if ( $row_inserted ) {
+				return ( $successMessage ?: $this->msg( 'ci-forms-data-saved' ) );
+
+			} else {
+				return ( $errorMessage ?: $this->msg( 'ci-forms-data-not-saved' ) );
 			}
-			return $this->msg( 'ci-forms-data-not-saved' );
 		}
 
-		if ( !empty( $wgCIFormsSenderEmail ) ) {
-			return $this->msg( 'ci-forms-dispatch-error-contact', $wgCIFormsSenderEmail );
+		if ( $dispatched ) {
+			return ( $successMessage ?: $this->msg( 'ci-forms-dispatch-success' ) );
 		}
-		return $this->msg( 'ci-forms-dispatch-error' );
+
+		if ( $row_inserted ) {
+			return ( $successMessage ?: $this->msg( 'ci-forms-data-saved' ) );
+		}
+
+		// we don't use "ci-forms-dispatch-error-contact"
+		// and "ci-forms-dispatch-error"anymore because we fallback
+		// to $dispatch = false
+		$formSubmit = self::mergeGlobal( 'submit', $form_result['form_values'] );
+		return ( $errorMessage ?: $this->msg( 'ci-forms-data-not-saved-contact', implode( ', ', $formSubmit ) ) );
 	}
 
 	/**
@@ -260,6 +332,10 @@ class CIFormsSubmit extends SpecialPage {
 		// ***ensure there aren't spaces between brackets otherwise
 		// Dompdf will not work
 		$stylesheet = preg_replace( '/\[\s*(.+?)\s*\]/', "[$1]", $stylesheet );
+
+		// see here, Dompdf does not support bounding-box
+		// https://github.com/dompdf/dompdf/issues/669
+		$stylesheet = preg_replace( '/(?<!\-)width:\s*100%/', "max-width:100%", $stylesheet );
 
 		$form_output_html .= $stylesheet;
 
@@ -362,6 +438,11 @@ class CIFormsSubmit extends SpecialPage {
 				// @phan-suppress-next-line PhanSuspiciousBinaryAddLists
 				explode( '_', $i ) + [ null, null, null, null, null ];
 
+			// this could be the "radio_for_required_checkboxes"
+			if ( empty( $a ) ) {
+				continue;
+			}
+
 			if ( in_array( $section, $exclude ) ) {
 				if ( $section == 'form' ) {
 					$form_values[$a] = $value;
@@ -451,45 +532,66 @@ class CIFormsSubmit extends SpecialPage {
 
 			switch ( $section['type'] ) {
 				case 'inputs':
+				// phpcs:ignore PSR2.ControlStructures.SwitchDeclaration.BodyOnNextLineCASE
 				case 'inputs responsive':
-					// @todo make uniform to the function "ci_form_section_process"
+
 					foreach ( $section['items'] as $value ) {
-						$required = false;
-						$placeholder = null;
-						$label =
-							trim( preg_replace_callback( '/\[\s*([^\[\]]*)\s*\]\s*(\*)?/',
-								static function ( $matches ) use ( &$required, &$placeholder ) {
-									$required = !empty( $matches[2] );
-
-									list( $input_type, $placeholder, $input_options ) =
-										CIForms::ci_form_parse_input_symbol( $matches[1] );
-									return '';
-								}, $value['label'] ) );
-
-						if ( empty( $label ) ) {
-							$label = $placeholder;
-						}
 
 						$output .= '<div class="ci_form_section_inputs_row">';
 						$output .= '<div class="ci_form_section_inputs_col' .
 							( $section['type'] == 'inputs responsive' ? '-25' : '' ) . '">';
 
-						if ( !empty( $label ) ) {
-							$output .= '<label>' . $label . ( $required ? ' *' : '' ) . '</label>';
-						}
+						preg_match_all( '/([^\[\]]*)\[\s*([^\[\]]*)\s*\]\s*(\*)?/', $value['label'], $match_all );
+						$inputs_per_row = count( $match_all[0] );
 
-						if ( $section['type'] == 'inputs responsive' ) {
-							$output .= '</div>';
-							$output .= '<div class="ci_form_section_inputs_col-75">';
-						}
+						$i = 0;
+						$output .= preg_replace_callback( '/([^\[\]]*)\[\s*([^\[\]]*)\s*\]\s*(\*)?/',
+							static function ( $matches ) use ( $section, $value, &$i, $inputs_per_row ) {
+								$replacement = '';
 
-						// $output .= '<input disabled="disabled" type="text" value="' .
-						// htmlspecialchars($value['value']) . '" />';
-						$output .= '<span class="input">' .
-							htmlspecialchars( $value['inputs'][0] ) . '</span>';
+								if ( $inputs_per_row > 1 ) {
+									$replacement .= '<div class="ci_form_section_inputs_inner_col" style="float:left;width:' . ( 100 / $inputs_per_row ) . '%">';
+								}
+
+								$label = trim( $matches[1] );
+
+								list( $input_type, $placeholder, $input_options ) =
+									CIForms::ci_form_parse_input_symbol( $matches[2] ) + [ null, null, null ];
+
+								$required =
+									( !empty( $matches[3] ) ? ' data-required="1" required' : '' );
+
+								// @phan-suppress-next-line PhanRedundantCondition
+								if ( $required && !empty( $placeholder ) ) {
+									$placeholder .= ' *';
+								}
+
+								if ( !empty( $label ) ) {
+									$replacement .= '<label>' . $label .
+										( $required && empty( $placeholder ) ? ' *' : '' ) . '</label>';
+								}
+
+								if ( $section['type'] == 'inputs responsive' && $i == 0 ) {
+									$replacement .= '</div>';
+									$replacement .= '<div class="ci_form_section_inputs_col-75">';
+								}
+
+								$replacement .= '<span class="input">' .
+									htmlspecialchars( $value['inputs'][$i] ) . '</span>';
+
+								if ( $inputs_per_row > 1 ) {
+									$replacement .= '</div>';
+								}
+
+								$i++;
+								return $replacement;
+							}, $value['label'] ); // preg_replace_callback
+
 						$output .= '</div>';
 						$output .= '</div>';
+
 					}
+
 					break;
 				case 'multiple choice':
 					$list_type_ordered = in_array( $section['list-style'], CIForms::$ordered_styles );
@@ -527,6 +629,11 @@ class CIFormsSubmit extends SpecialPage {
 
 						if ( $example ) {
 							$label = trim( substr( $label, 1 ) );
+
+							// simply ignore the example line since
+							// the numeration isn't handled correctly by
+							// Dompdf using css counter-increment
+							continue;
 						}
 
 						$output .= '<li class="ci_form_section_cloze_test_list_question' .

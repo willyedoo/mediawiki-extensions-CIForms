@@ -1,7 +1,7 @@
 {
 	"name": "CIForms",
 	"author": "thomas-topway-it",
-	"version": "1.2.0",
+	"version": "1.2.1",
 	"url": "https://www.mediawiki.org/wiki/Extension:CIForms",
 	"descriptionmsg": "ci-forms-extension-description",
 	"license-name": "GPL-2.0-or-later",
@@ -14,6 +14,7 @@
 			"i18n"
 		]
 	},
+	"callback": "CIForms::initExtension",
 	"AutoloadClasses": {
 		"CIForms": "includes/CIForms.php",
 		"CIFormsSubmit": "includes/specials/CIFormsSubmit.php",
@@ -69,6 +70,45 @@
 				"desktop",
 				"mobile"
 			]
+		}
+	},
+	"config_prefix": "CIForms",
+	"config": {
+		"SubmissionGroups": {
+			"value": []
+		},
+		"SubmissionGroupsGlobalMode": {
+			"value": 0
+		},
+		"SubmitEmail": {
+			"value": []
+		},
+		"SubmitEmailGlobalMode": {
+			"value": 0
+		},
+		"SuccessMessage": {
+			"value": null
+		},
+		"SuccessMessageGlobalMode": {
+			"value": 0
+		},
+		"ErrorMessage": {
+			"value": null
+		},
+		"ErrorMessageGlobalMode": {
+			"value": 0
+		},
+		"GoogleRecaptchaSiteKey": {
+			"value": null
+		},
+		"GoogleRecaptchaSecret": {
+			"value": null
+		},
+		"SenderEmail": {
+			"value": null
+		},
+		"SenderName": {
+			"value": null
 		}
 	},
 	"manifest_version": 2

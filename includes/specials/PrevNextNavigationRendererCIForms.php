@@ -1,125 +1,45 @@
 <?php
 /**
- * This program is free software; you can redistribute it and/or modify
+ * This file is part of the MediaWiki extension Wikisphere.
+ *
+ * Wiskiphere_Subpages is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 2 of the License, or
  * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * Wiskiphere_Subpages is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- * http://www.gnu.org/copyleft/gpl.html
+ * You should have received a copy of the GNU General Public License
+ * along with Wiskiphere_Subpages.  If not, see <http://www.gnu.org/licenses/>.
  *
  * @file
+ * @ingroup extensions
+ * @author thomas-topway-it <thomas.topway.it@mail.com>
+ * @copyright Copyright ©2021-2022, https://wikisphere.org
  */
 
-// namespace MediaWiki\Navigation;
-
-/**
- * Helper class for generating prev/next links for paging.
- * @todo Use LinkTarget instead of Title
- *
- * @since 1.34
- */
-class PrevNextNavigationRendererCIForms {
-
-	/** @var MessageLocalizer */
-	private $messageLocalizer;
+class PrevNextNavigationRendererCIForms extends MediaWiki\Navigation\PrevNextNavigationRenderer {
 
 	/** @var array */
 	private $additional_query_parameters;
+
+	/**
+	 * @var MessageLocalizer
+	 */
+	private $messageLocalizer;
 
 	/**
 	 * @param MessageLocalizer $messageLocalizer
 	 * @param array $additional_query_parameters
 	 */
 	public function __construct( MessageLocalizer $messageLocalizer, $additional_query_parameters ) {
+		// ***edited
+		parent::__construct( $messageLocalizer );
 		$this->messageLocalizer = $messageLocalizer;
 		$this->additional_query_parameters = $additional_query_parameters;
-	}
-
-	/**
-	 * Generate (prev x| next x) (20|50|100...) type links for paging
-	 *
-	 * @param Title $title Title object to link
-	 * @param int $offset
-	 * @param int $limit
-	 * @param array $query Optional URL query parameter string
-	 * @param bool $atend Optional param for specified if this is the last page
-	 * @return string
-	 */
-	public function buildPrevNextNavigation(
-		Title $title,
-		$offset,
-		$limit,
-		array $query = [],
-		$atend = false
-	) {
-		# Make 'previous' link
-		$prev = $this->messageLocalizer->msg( 'prevn' )
-			->title( $title )
-			->numParams( $limit )
-			->text();
-
-		if ( $offset > 0 ) {
-			$plink = $this->numLink(
-				$title,
-				max( $offset - $limit, 0 ),
-				$limit,
-				$query,
-				$prev,
-				'prevn-title',
-				'mw-prevlink'
-			);
-		} else {
-			$plink = htmlspecialchars( $prev );
-		}
-
-		# Make 'next' link
-		$next = $this->messageLocalizer->msg( 'nextn' )
-			->title( $title )
-			->numParams( $limit )
-			->text();
-		if ( $atend ) {
-			$nlink = htmlspecialchars( $next );
-		} else {
-			$nlink = $this->numLink(
-				$title,
-				$offset + $limit,
-				$limit,
-				$query,
-				$next,
-				'nextn-title',
-				'mw-nextlink'
-			);
-		}
-
-		# Make links to set number of items per page
-		$numLinks = [];
-		// @phan-suppress-next-next-line PhanUndeclaredMethod
-		// @fixme MessageLocalizer doesn't have a getLanguage() method!
-		$lang = $this->messageLocalizer->getLanguage();
-		foreach ( [ 20, 50, 100, 250, 500 ] as $num ) {
-			$numLinks[] = $this->numLink(
-				$title,
-				$offset,
-				$num,
-				$query,
-				$lang->formatNum( $num ),
-				'shown-title',
-				'mw-numlink'
-			);
-		}
-
-		return $this->messageLocalizer->msg( 'viewprevnext' )
-			->title( $title )
-			->rawParams( $plink, $nlink, $lang->pipeList( $numLinks ) )
-			->escaped();
 	}
 
 	/**

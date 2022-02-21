@@ -41,6 +41,21 @@ class CIForms {
 	];
 
 	/**
+	 * @param array $credits
+	 */
+	public static function initExtension( $credits = [] ) {
+		if ( !defined( 'CIFORMS_VALUE_IF_NULL' ) ) {
+			define( 'CIFORMS_VALUE_IF_NULL', 0 );
+		}
+		if ( !defined( 'CIFORMS_VALUE_OVERRIDE' ) ) {
+			define( 'CIFORMS_VALUE_OVERRIDE', 1 );
+		}
+		if ( !defined( 'CIFORMS_VALUE_APPEND' ) ) {
+			define( 'CIFORMS_VALUE_APPEND', 2 );
+		}
+	}
+
+	/**
 	 * Register any render callbacks with the parser
 	 *
 	 * @param Parser $parser
@@ -129,10 +144,9 @@ class CIForms {
 	 */
 	public static function isCaptchaEnabled() {
 		global $wgCIFormsGoogleRecaptchaSiteKey;
-		// phpcs:ignore MediaWiki.VariableAnalysis.UnusedGlobalVariables.UnusedGlobal$wgCIFormsGoogleRecaptchaSecret
 		global $wgCIFormsGoogleRecaptchaSecret;
 
-		return !empty( $wgCIFormsGoogleRecaptchaSiteKey );
+		return ( !empty( $wgCIFormsGoogleRecaptchaSiteKey ) && !empty( $wgCIFormsGoogleRecaptchaSecret ) );
 	}
 
 	/**
@@ -143,20 +157,13 @@ class CIForms {
 	public static function ci_form( Parser $parser, ...$argv ) {
 		self::$loadModule = true;
 
-		// phpcs:ignore MediaWiki.VariableAnalysis.UnusedGlobalVariables.UnusedGlobal$wgCIFormsSuccessMessage
-		global $wgCIFormsSuccessMessage;
-		// phpcs:ignore MediaWiki.VariableAnalysis.UnusedGlobalVariables.UnusedGlobal$wgCIFormsErrorMessage
-		global $wgCIFormsErrorMessage;
-		global $wgCIFormsSubmitEmail;
-		global $wgCIFormsSubmissionGroups;
-
 		$named_parameters = [
-			'submit' => $wgCIFormsSubmitEmail,
+			'submit' => null,
 			'title' => null,
-			'submission groups' => $wgCIFormsSubmissionGroups,
-			'success message' => null, // $wgCIFormsSuccessMessage,
-			'error message' => null,   // $wgCIFormsErrorMessage
-			'css class' => '',        // $wgCIFormsErrorMessage
+			'submission groups' => null,
+			'success message' => null,
+			'error message' => null,
+			'css class' => '',
 
 		]; // email to which submit
 
@@ -215,8 +222,7 @@ class CIForms {
 		$hidden_fields = [ 'title', 'submission groups', 'submit', 'success message', 'error message' ];
 
 		foreach ( $hidden_fields as $value ) {
-			$output .= '<input type="hidden" name="form_' . str_replace( ' ', '-', $value ) . '" value="' .
-				htmlspecialchars( $named_parameters[$value] ) . '">';
+			$output .= self::hidden_input( 'form_' . str_replace( ' ', '-', $value ), $named_parameters[$value] );
 		}
 
 		if ( self::isCaptchaEnabled() ) {
@@ -225,10 +231,8 @@ class CIForms {
 
 		$title = $parser->getTitle();
 
-		$output .= '<input type="hidden" name="form_pagename" value="' .
-			htmlspecialchars( $title->getText() ) . '">';
-		$output .= '<input type="hidden" name="form_pageid" value="' .
-			htmlspecialchars( $title->getArticleID() ) . '">';
+		$output .= self::hidden_input( 'form_pagename', $title->getText() );
+		$output .= self::hidden_input( 'form_pageid', $title->getArticleID() );
 
 		$output .= '<input class="ci_form_input_submit" type="submit" value="Submit">';
 		$output .= '</div>';
@@ -338,6 +342,15 @@ class CIForms {
 	}
 
 	/**
+	 * @param string $name
+	 * @param string|int|null $value
+	 * @return string $value
+	 */
+	protected static function hidden_input( $name, $value ) {
+		return '<input type="hidden" name="' . $name . '" value="' . htmlspecialchars( (string)$value ) . '">';
+	}
+
+	/**
 	 * @param array|string[] $argv
 	 * @return string
 	 */
@@ -352,6 +365,7 @@ class CIForms {
 			'list-type' => 'none',
 			// 'unordered', 'letters', 'numbers' + standard values
 			'max answers' => 1,
+			'min answers' => null,	// number or percent, for multiple choice questions if max answers > 1, default 1/2 +1
 			'suggestions' => null
 			// if multiple choice
 		];
@@ -402,14 +416,14 @@ class CIForms {
 					}
 				}
 
-				$output .= '<input type="hidden" name="' . $unique_id .
-					'_section_list-style" value="' .
-					htmlspecialchars( $list_style ) . '">';
+				$output .= self::hidden_input( $unique_id . '_section_list-style', $list_style );
 
 				if ( $named_parameters['type'] == 'multiple choice' ) {
-					$output .= '<input type="hidden" name="' . $unique_id .
-						'_section_multiple-choice-max-answers" value="' .
-						htmlspecialchars( $named_parameters['max answers'] ) . '">';
+					$output .= self::hidden_input( $unique_id . '_section_multiple-choice-max-answers', $named_parameters['max answers'] );
+
+					if ( (int)$named_parameters['max answers'] > 1 ) {
+						$output .= self::hidden_input( $unique_id . '_section_multiple-choice-min-answers', $named_parameters['min answers'] );
+					}
 				}
 				break;
 			case 'inputs':
@@ -423,15 +437,11 @@ class CIForms {
 				self::replace_wikitext_and_html( $named_parameters['title'] );
 		}
 
-		$output .= '<input type="hidden" name="' . $unique_id . '_section_type" value="' .
-			htmlspecialchars( $named_parameters['type'] ) . '">';
-		$output .= '<input type="hidden" name="' . $unique_id . '_section_title" value="' .
-			htmlspecialchars( $named_parameters['title'] ) . '">';
+		$output .= self::hidden_input( $unique_id . '_section_type', $named_parameters['type'] );
+		$output .= self::hidden_input( $unique_id . '_section_title', $named_parameters['title'] );
 
 		if ( !empty( $named_parameters['title'] ) ) {
-			$output .= '<div class="ci_form_section_title">';
-			$output .= $named_parameters['title'];
-			$output .= '</div>';
+			$output .= '<div class="ci_form_section_title">' . $named_parameters['title'] . '</div>';
 		}
 
 		switch ( $named_parameters['type'] ) {
@@ -442,36 +452,40 @@ class CIForms {
 					$output .= '<div class="ci_form_section_inputs_row">';
 					$output .= '<div class="ci_form_section_inputs_col' .
 						( $named_parameters['type'] == 'inputs responsive' ? '-25' : '' ) . '">';
-					$output .= '<input type="hidden" name="' . $unique_id . '_items_' . $n .
-						'_label" value="' . htmlspecialchars( $value ) . '" />';
+
+					$output .= self::hidden_input( $unique_id . '_items_' . $n . '_label', $value );
+
+					preg_match_all( '/([^\[\]]*)\[\s*([^\[\]]*)\s*\]\s*(\*)?/', $value, $match_all );
+					$inputs_per_row = count( $match_all[0] );
 
 					$i = 0;
 					$output .= preg_replace_callback( '/([^\[\]]*)\[\s*([^\[\]]*)\s*\]\s*(\*)?/',
-						function ( $matches ) use ( $named_parameters, &$i, $n, $unique_id ) {
-							// @todo redesign to allow more than 1 input per line
-							if ( $i > 0 ) {
-								return $matches[0];
+						function ( $matches ) use ( $named_parameters, &$i, $n, $unique_id, $inputs_per_row ) {
+							$replacement = '';
+
+							if ( $inputs_per_row > 1 ) {
+								$replacement .= '<div class="ci_form_section_inputs_inner_col" style="float:left;width:' . ( 100 / $inputs_per_row ) . '%">';
 							}
+
 							$label = trim( $matches[1] );
 
 							list( $input_type, $placeholder, $input_options ) =
-								self::ci_form_parse_input_symbol( $matches[2] );
+								self::ci_form_parse_input_symbol( $matches[2] ) + [ null, null, null ];
 
 							$required =
 								( !empty( $matches[3] ) ? ' data-required="1" required' : '' );
 
+							// @phan-suppress-next-line PhanRedundantCondition
 							if ( $required && !empty( $placeholder ) ) {
 								$placeholder .= ' *';
 							}
-
-							$replacement = '';
 
 							if ( !empty( $label ) ) {
 								$replacement .= '<label>' . $label .
 									( $required && empty( $placeholder ) ? ' *' : '' ) . '</label>';
 							}
 
-							if ( $named_parameters['type'] == 'inputs responsive' ) {
+							if ( $named_parameters['type'] == 'inputs responsive' && $i == 0 ) {
 								$replacement .= '</div>';
 								$replacement .= '<div class="ci_form_section_inputs_col-75">';
 							}
@@ -543,6 +557,11 @@ class CIForms {
 										$required . '/>';
 									break;
 							}
+
+							if ( $inputs_per_row > 1 ) {
+								$replacement .= '</div>';
+							}
+
 							$i++;
 							return $replacement;
 						}, $value ); // preg_replace_callback
@@ -571,8 +590,7 @@ class CIForms {
 
 				foreach ( $lines as $key => $value ) {
 					$output .= '<li>';
-					$output .= '<input type="hidden" name="' . $unique_id . '_items_' . $n .
-						'_label" value="' . htmlspecialchars( $value ) . '" />';
+					$output .= self::hidden_input( $unique_id . '_items_' . $n . '_label', $value );
 
 					// if it's a radio, the input name shall be the same for all inputs
 					$output .= '<input name="' . $unique_id . '_items_' .
@@ -654,12 +672,8 @@ class CIForms {
 
 				shuffle( $suggestions );
 
-				$output .= '<input type="hidden" name="' . $unique_id .
-					'_section_cloze-test-suggestions" value="' .
-					htmlspecialchars( implode( ',', $suggestions ) ) . '" />';
-				$output .= '<input type="hidden" name="' . $unique_id .
-					'_section_cloze-test-answers" value="' .
-					htmlspecialchars( implode( ',', $answers ) ) . '" />';
+				$output .= self::hidden_input( $unique_id .	'_section_cloze-test-suggestions', implode( ',', $suggestions ) );
+				$output .= self::hidden_input( $unique_id .	'_section_cloze-test-answers', implode( ',', $answers ) );
 
 				// suggestions framed
 				if ( !empty( $suggestions ) ) {
@@ -692,9 +706,7 @@ class CIForms {
 					$output .= '<li class="ci_form_section_cloze_test_list_question' .
 						( $example ? '_example' : '' ) . '">';
 
-					$output .= '<input type="hidden" name="' . $unique_id . '_items_' . $n .
-						'_label" value="' . htmlspecialchars( ( $example ? '* ' : '' ) . $label ) .
-						'" />';
+					$output .= self::hidden_input( $unique_id .	'_items_' . $n . '_label', ( $example ? '* ' : '' ) . $label );
 
 					$i = 0;
 					$label =
@@ -727,20 +739,14 @@ class CIForms {
 		return $output;
 	}
 
-	// check also here
-	// https://www.mediawiki.org/wiki/Manual:Parser_functions#The_setFunctionHook_hook
-
 	/**
 	 * @param string $value
 	 * @return array
 	 */
 	public static function ci_form_parse_input_symbol( $value ) {
 		if ( empty( $value ) ) {
-			return [ 'text', null ];
+			return [ 'text', null, null ];
 		}
-
-		// https://quasar.dev/vue-components/input
-		// text password textarea email search tel file number url time date
 
 		$input_types = [
 				'text',
