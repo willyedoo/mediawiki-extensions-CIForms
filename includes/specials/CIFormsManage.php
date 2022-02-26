@@ -28,6 +28,8 @@ if ( is_readable( __DIR__ . '/../../vendor/autoload.php' ) ) {
 }
 
 use MediaWiki\MediaWikiServices;
+use Wikimedia\Rdbms\FakeResultWrapper;
+use Wikimedia\Rdbms\IDatabase;
 use Wikimedia\Rdbms\IResultWrapper;
 
 class CIFormsManage extends QueryPage {
