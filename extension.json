@@ -1,7 +1,7 @@
 {
 	"name": "CIForms",
 	"author": "thomas-topway-it",
-	"version": "1.2.1",
+	"version": "1.3.0",
 	"url": "https://www.mediawiki.org/wiki/Extension:CIForms",
 	"descriptionmsg": "ci-forms-extension-description",
 	"license-name": "GPL-2.0-or-later",
@@ -92,10 +92,22 @@
 		"SuccessMessageGlobalMode": {
 			"value": 0
 		},
+		"SuccessPage": {
+			"value": null
+		},
+		"SuccessPageGlobalMode": {
+			"value": 0
+		},
 		"ErrorMessage": {
 			"value": null
 		},
 		"ErrorMessageGlobalMode": {
+			"value": 0
+		},
+		"ErrorPage": {
+			"value": null
+		},
+		"ErrorPageGlobalMode": {
 			"value": 0
 		},
 		"GoogleRecaptchaSiteKey": {

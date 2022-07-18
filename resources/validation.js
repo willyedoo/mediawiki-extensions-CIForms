@@ -20,9 +20,14 @@
  */
 
 $( document ).ready( function () {
+	var msg1 = mw.config.get( 'ci-forms-validation-msg1' );
+	var msg2 = mw.config.get( 'ci-forms-validation-msg2' );
+	var msg3 = mw.config.get( 'ci-forms-validation-msg3' );
+
+	var currentSection = {};
 
 	function escape( s ) {
-		return ( String( s ) )
+		return String( s )
 			.replace( /&/g, '\x26' )
 			.replace( /'/g, '\x27' )
 			.replace( /"/g, '\x22' )
@@ -32,55 +37,88 @@ $( document ).ready( function () {
 
 	var site_key = mw.config.get( 'ci_forms_google_recaptcha_site_key' );
 
-	mw.loader.getScript( 'https://www.google.com/recaptcha/api.js?render=' + site_key ).then( function () {
-		if ( $( 'input[name="g-recaptcha-response"]' ).length ) {
-			grecaptcha.ready( function () {
-				grecaptcha.execute( site_key, { action: 'validate_captcha' } ).then( function ( token ) {
-					$( 'input[name="g-recaptcha-response"]' ).val( token );
+	mw.loader
+		.getScript( 'https://www.google.com/recaptcha/api.js?render=' + site_key )
+		.then(
+			function () {
+				if ( $( 'input[name="g-recaptcha-response"]' ).length ) {
+					grecaptcha.ready( function () {
+						grecaptcha
+							.execute( site_key, { action: 'validate_captcha' } )
+							.then( function ( token ) {
+								$( 'input[name="g-recaptcha-response"]' ).val( token );
+							} )
+							.catch( function ( error ) {} );
+					} );
+				}
+			},
+			function ( e ) {
+				mw.log.error( e.message );
+			}
+		);
 
-				} ).catch( function ( error ) {
-				} );
-			} );
+	$( '.ci_form' ).each( function ( index ) {
+		var paging = $( this )
+			.find( 'input[type=hidden][name=form_paging]' )
+			.first()
+			.val();
+
+		if ( paging && paging !== 'false' ) {
+			$( this ).find( '.ci_form_input_navigation_next' ).attr( 'type', 'submit' );
 		}
 
-	}, function ( e ) {
-		mw.log.error( e.message );
+		currentSection[ index ] = 0;
+		$( this )
+			.find(
+				( paging && paging !== 'false' ?
+					'.ci_form_section_display_' + currentSection[ index ] + ' ' :
+					'' ) + 'input[data-required="1"]'
+			)
+			.prop( 'required', true );
+		$( this ).data( 'form-index', index );
 	} );
 
 	$( '.ci_form li' ).each( function ( index ) {
 		var el = this;
 		var section_el = $( this ).closest( '.ci_form_section' );
-		var radioForCheckboxes = $( section_el ).find( '.radio_for_required_checkboxes' ).first();
-		var max_answers = $( section_el ).find( 'input[type=hidden][name$=_multiple-choice-max-answers]' ).val();
+		var radioForCheckboxes = $( section_el )
+			.find( '.radio_for_required_checkboxes' )
+			.first();
+		var max_answers = $( section_el )
+			.find( 'input[type=hidden][name$=_multiple-choice-max-answers]' )
+			.val();
 
-		$( this ).find( 'input[type=text]' ).on( 'click', function () {
-			var count = $( section_el ).find( 'input[type=checkbox]:checked' ).length;
+		$( this )
+			.find( 'input[type=text]' )
+			.on( 'click', function () {
+				var count = $( section_el ).find( 'input[type=checkbox]:checked' ).length;
 
-			if ( count >= max_answers ) {
-				alert( 'maximum ' + max_answers + ' choices' );
-				return false;
-			}
+				if ( count > max_answers ) {
+					alert( msg1.replace( '$1', max_answers ) );
+					return false;
+				}
 
-			if ( $( this ).attr( 'data-required' ) === 1 ) {
-				$( this ).prop( 'required', true );
-			}
+				if ( $( this ).attr( 'data-required' ) === 1 ) {
+					$( this ).prop( 'required', true );
+				}
 
-			$( el ).find( 'input[type=radio]' ).prop( 'checked', true );
-			$( el ).find( 'input[type=checkbox]' ).prop( 'checked', true );
+				$( el ).find( 'input[type=radio]' ).prop( 'checked', true );
+				$( el ).find( 'input[type=checkbox]' ).prop( 'checked', true );
 
-			radioForCheckboxes[ 0 ].checked = ( !!count );
+				radioForCheckboxes[ 0 ].checked = !!count;
+			} );
 
-		} );
+		$( this )
+			.find( 'input[type=checkbox]' )
+			.on( 'click', function () {
+				var count = $( section_el ).find( 'input[type=checkbox]:checked' ).length;
 
-		$( this ).find( 'input[type=checkbox]' ).on( 'click', function () {
-			var count = $( section_el ).find( 'input[type=checkbox]:checked' ).length;
-
-			if ( count > max_answers ) {
-				alert( 'maximum ' + max_answers + ' choices' );
-				return false;
-			}
-			radioForCheckboxes[ 0 ].checked = ( !!count );
-		} );
+				if ( count > max_answers ) {
+					alert( msg1.replace( '$1', max_answers ) );
+					return false;
+				}
+				radioForCheckboxes[ 0 ].checked = !!count;
+			} );
 	} );
 
 	// https://stackoverflow.com/questions/15031513/jquery-help-to-enforce-maxlength-on-textarea
@@ -89,13 +127,17 @@ $( document ).ready( function () {
 		var text = $( this ).val();
 		var chars = text.length;
 
-		$( this ).parents().each( function () {
-			var span = $( this ).find( '.ci_form_section_inputs_textarea_maxlength' ).first();
+		$( this )
+			.parents()
+			.each( function () {
+				var span = $( this )
+					.find( '.ci_form_section_inputs_textarea_maxlength' )
+					.first();
 
-			if ( span.length ) {
-				span.html( chars + '/' + limit + ' characters' );
-			}
-		} );
+				if ( span.length ) {
+					span.html( chars + '/' + limit + ' characters' );
+				}
+			} );
 
 		if ( chars > limit ) {
 			var new_text = text.slice( 0, Math.max( 0, limit ) );
@@ -107,7 +149,6 @@ $( document ).ready( function () {
 		if ( $( this ).find( 'option' ).length > 20 ) {
 			$( this ).select2();
 		}
-
 	} );
 
 	// we cannot use form on submit because
@@ -116,68 +157,238 @@ $( document ).ready( function () {
 	$( '.ci_form input[type=radio]' ).on( 'click', function () {
 		var section_el = $( this ).closest( '.ci_form_section' );
 
-		$( section_el ).find( 'li' ).each( function () {
-			var el = this;
+		$( section_el )
+			.find( 'li' )
+			.each( function () {
+				var el = this;
 
-			$( this ).find( 'input[type=radio][name$=_selected]:checked' ).each( function () {
-				$( el ).find( 'input[type=text][data-required="1"]' ).prop( 'required', true );
-			} );
+				$( this )
+					.find( 'input[type=radio][name$=_selected]:checked' )
+					.each( function () {
+						$( el )
+							.find( 'input[type=text][data-required="1"]' )
+							.prop( 'required', true );
+					} );
 
-			$( this ).find( 'input[type=radio][name$=_selected]:not(:checked)' ).each( function () {
-				$( el ).find( 'input[type=text]' ).prop( 'required', false );
+				$( this )
+					.find( 'input[type=radio][name$=_selected]:not(:checked)' )
+					.each( function () {
+						$( el ).find( 'input[type=text]' ).removeAttr( 'required' );
+					} );
 			} );
-		} );
 	} );
 
 	$( '.ci_form input[type=checkbox]' ).on( 'click', function () {
 		var section_el = $( this ).closest( '.ci_form_section' );
 
-		$( section_el ).find( 'li' ).each( function () {
-			var el = this;
+		$( section_el )
+			.find( 'li' )
+			.each( function () {
+				var el = this;
 
-			$( this ).find( 'input[type=checkbox][name$=_selected]:checked' ).each( function () {
-				$( el ).find( 'input[type=text][data-required="1"]' ).prop( 'required', true );
-			} );
+				$( this )
+					.find( 'input[type=checkbox][name$=_selected]:checked' )
+					.each( function () {
+						$( el )
+							.find( 'input[type=text][data-required="1"]' )
+							.prop( 'required', true );
+					} );
 
-			$( this ).find( 'input[type=checkbox][name$=_selected]:not(:checked)' ).each( function () {
-				$( el ).find( 'input[type=text]' ).prop( 'required', false );
+				$( this )
+					.find( 'input[type=checkbox][name$=_selected]:not(:checked)' )
+					.each( function () {
+						$( el ).find( 'input[type=text]' ).removeAttr( 'required' );
+					} );
 			} );
-		} );
 	} );
 
-	// cloze test,
-	// fill-in at least half + 1 questions
+	$( '.ci_form_section_submit button' ).click( function ( evt ) {
+		var form_el = $( this ).closest( '.ci_form' );
+
+		var next = $( this ).prop( 'class' ).indexOf( 'next' ) !== -1;
+
+		if ( next ) {
+			return;
+		}
+
+		var index = form_el.data( 'form-index' );
+		var current_section = currentSection[ index ] + ( next ? 1 : -1 );
+
+		var count =
+			$( form_el ).find( "[class^='ci_form_section_display_']" ).length - 1;
+
+		// $(form_el).find(".ci_form_section").length - 1;
+
+		if ( current_section < 0 || current_section > count ) {
+			return;
+		}
+
+		$( form_el )
+			.find( '.ci_form_section_display_' + currentSection[ index ] )
+			.first()
+			.hide();
+
+		$( form_el )
+			.find(
+				'.ci_form_section_display_' +
+					currentSection[ index ] +
+					' input[data-required="1"]'
+			)
+			.removeAttr( 'required' );
+
+		currentSection[ index ] = current_section;
+		$( form_el )
+			.find( '.ci_form_section_display_' + current_section )
+			.first()
+			.fadeIn( 'slow' );
+		$( form_el )
+			.find( '.ci_form_input_navigation_back' )
+			.first()
+			.css( 'display', current_section ? 'inline-block' : 'none' );
+		$( form_el )
+			.find( '.ci_form_input_navigation_next' )
+			.first()
+			.css( 'display', current_section !== count ? 'inline-block' : 'none' );
+		$( form_el )
+			.find( '.ci_form_input_submit' )
+			.first()
+			.css( 'display', current_section === count ? 'inline-block' : 'none' );
+	} );
 
 	$( '.ci_form' ).submit( function ( evt ) {
-		var form_element = $( this );
+		var form_el = $( this );
 
-		$( this ).find( '.ci_form_section_cloze_test_list' ).each( function () {
-			var section = $( this ).closest( '.ci_form_section' );
-			var question_name = $( section ).find( '.ci_form_section_title' ).text();
+		var paging = $( this )
+			.find( 'input[type=hidden][name=form_paging]' )
+			.first()
+			.val();
 
-			if ( !question_name ) {
-				question_name = $( form_element ).find( '.ci_form_title' ).text();
-			}
+		var index, current_section, count;
 
-			var inputs = 0;
-			var submitted = 0;
+		if ( paging && paging !== 'false' ) {
+			index = form_el.data( 'form-index' );
+			current_section = currentSection[ index ] + 1;
+			count =
+				$( form_el ).find( "[class^='ci_form_section_display_']" ).length - 1;
 
-			$( this ).find( 'input[type=text][name$=_value]' ).each( function () {
-				var val = $( this ).val().trim();
+			// $(form_el).find(".ci_form_section").length - 1;
+		}
 
-				if ( val !== '' && val !== null ) {
-					submitted++;
+		var preventSubmit = false;
+		$( this )
+			.find(
+				( paging && paging !== 'false' ?
+					'.ci_form_section_display_' + currentSection[ index ] + ' ' :
+					'' ) + '.ci_form_section'
+			)
+			.each( function () {
+				var section_type = $( this )
+					.find( 'input[type=hidden][name$=_section_type]' )
+					.val();
+
+				var min_answers = $( this )
+					.find( 'input[type=hidden][name$=_multiple-choice-min-answers]' )
+					.val();
+
+				var question_name = $( this ).find( '.ci_form_section_title' ).text();
+
+				if ( !question_name ) {
+					question_name = $( form_el ).find( '.ci_form_title' ).text();
 				}
-				inputs++;
+
+				switch ( section_type ) {
+					case 'cloze test':
+						var inputs = 0;
+						var filledIn = 0;
+
+						$( this )
+							.find( 'input[type=text][name$=_value]' )
+							.each( function () {
+								var val = $( this ).val().trim();
+
+								if ( val !== '' && val !== null ) {
+									filledIn++;
+								}
+								inputs++;
+							} );
+
+						var minNumber = min_answers || Math.floor( inputs / 2 ) + 1;
+
+						if ( filledIn < minNumber ) {
+							alert(
+								msg2
+									.replace( '$1', minNumber )
+									.replace( '$2', escape( question_name ) )
+							);
+							preventSubmit = true;
+							return false;
+						}
+
+						break;
+
+					case 'multiple choice':
+						if ( min_answers ) {
+							var checked = $( this ).find(
+								'input[type=checkbox][name$=_selected]:checked'
+							).length;
+							if ( checked < min_answers ) {
+								alert(
+									msg2
+										.replace( '$1', min_answers )
+										.replace( '$2', escape( question_name ) )
+								);
+								preventSubmit = true;
+								return false;
+							}
+						}
+
+						break;
+				}
 			} );
 
-			var min = Math.floor( inputs / 2 ) + 1;
+		if ( preventSubmit ) {
+			evt.preventDefault();
+			return false;
+		}
 
-			if ( submitted < min ) {
+		if ( paging && paging !== 'false' ) {
+			if ( current_section <= count ) {
+				$( form_el )
+					.find( '.ci_form_section_display_' + currentSection[ index ] )
+					.first()
+					.hide();
+
+				// next section
+				currentSection[ index ] = current_section;
+
+				$( form_el )
+					.find( '.ci_form_section_display_' + current_section )
+					.first()
+					.fadeIn( 'slow' );
+
+				$( this )
+					.find( '.ci_form_section_display_' + current_section )
+					.find( 'input[data-required="1"]' )
+					.prop( 'required', true );
+			}
+
+			$( form_el )
+				.find( '.ci_form_input_navigation_back' )
+				.first()
+				.css( 'display', current_section ? 'inline-block' : 'none' );
+			$( form_el )
+				.find( '.ci_form_input_navigation_next' )
+				.first()
+				.css( 'display', current_section !== count ? 'inline-block' : 'none' );
+			$( form_el )
+				.find( '.ci_form_input_submit' )
+				.first()
+				.css( 'display', current_section === count ? 'inline-block' : 'none' );
+
+			if ( current_section <= count ) {
 				evt.preventDefault();
-				alert( 'Please enter at least ' + min + ' answers for the question "' + escape( question_name ) + '"' );
 				return false;
 			}
-		} );
+		}
 	} );
 } );

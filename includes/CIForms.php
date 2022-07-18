@@ -70,6 +70,12 @@ class CIForms {
 	 * @param Skin $skin
 	 */
 	public static function onBeforePageDisplay( OutputPage $outputPage, Skin $skin ) {
+		$outputPage->addJsConfigVars( [
+			'ci-forms-validation-msg1' => wfMessage( 'ci-forms-validation-msg1' )->text(),
+			'ci-forms-validation-msg2' => wfMessage( 'ci-forms-validation-msg2' )->text(),
+			'ci-forms-validation-msg3' => wfMessage( 'ci-forms-validation-msg3' )->text(),
+		] );
+
 		$title = $outputPage->getTitle();
 		$categories = $title->getParentCategories();
 
@@ -116,19 +122,22 @@ class CIForms {
 	public static function onLoadExtensionSchemaUpdates( DatabaseUpdater $updater = null ) {
 		$base = __DIR__;
 
+		$dbType = $updater->getDB()->getType();
+
 		$array = [
 			[
 				'table' => 'CIForms_submissions',
-				'filename' => '../sql/CIForms_submissions.sql'
+				'filename' => '../' . $dbType . '/CIForms_submissions.sql'
 			],
 			[
 				'table' => 'CIForms_submissions_groups',
-				'filename' => '../sql/CIForms_submissions_groups.sql'
+				'filename' => '../' . $dbType . '/CIForms_submissions_groups.sql'
 			],
 		];
 
-		if ( $updater->getDB()->getType() == 'mysql' ) {
-			foreach ( $array as $value ) {
+		foreach ( $array as $value ) {
+			if ( file_exists( $base . '/' . $value['filename'] ) ) {
+
 				$updater->addExtensionUpdate(
 					[
 						'addTable', $value['table'],
@@ -163,25 +172,32 @@ class CIForms {
 			'submission groups' => null,
 			'success message' => null,
 			'error message' => null,
+			'success page' => null,
+			'error page' => null,
+			'paging' => null,	// true, or 1,1,1,1,1, or 2,2,1
+			'submit text' => null,
+			'navigation next' => null,
+			'navigation back' => null,
 			'css class' => '',
 
 		]; // email to which submit
 
 		$parser->addTrackingCategory( 'ci-form' );
 		$set_named_parameters = [];
-		$lines = self::parse_function_arguments( $argv, $named_parameters, $set_named_parameters );
-		$section_lines = [];
+		$body = self::parse_function_arguments( $argv, $named_parameters, $set_named_parameters );
 
-		foreach ( $lines as $key => $value ) {
+		$subsections = [];
+		foreach ( $body as $key => $value ) {
 			// https://www.mediawiki.org/wiki/Strip_marker
 			// @todo add some logic to fix a missing pipe
 
-			if ( !preg_match( '/^(\x7F\'"`UNIQ.+?QINU`"\'\x7F){1}(\s+\x7F\'"`UNIQ.+?QINU`"\'\x7F)*$/',
+			if ( preg_match( '/^(\x7F\'"`UNIQ.+?QINU`"\'\x7F){1}(\s+\x7F\'"`UNIQ.+?QINU`"\'\x7F)*$/',
 				$value ) ) {
-				unset( $lines[$key] );
-				$section_lines[] = $value;
-			} else {
-				$lines[$key] = preg_replace( '/\s+/', " ", $value );
+
+				// *** handle missing pipes between nested sections
+				preg_match_all( '/\x7F\'"`UNIQ.+?QINU`"\'\x7F/', $value, $match );
+				$subsections = array_merge( $subsections, $match[0] );
+				unset( $body[$key] );
 			}
 		}
 
@@ -206,20 +222,53 @@ class CIForms {
 		}
 
 		$output .= '<div class="ci_form_sections_container' .
-			( count( $lines ) ? ' multiple_sections' : '' ) . '">';
+			( count( $subsections ) ? ' multiple_sections' : '' ) . '">';
 
-		if ( $section_lines ) {
-			$output .= self::ci_form_section_process( $section_lines );
+		if ( count( $body ) ) {
+			$output .= self::ci_form_section_process( $body );
 		}
 
-		if ( count( $lines ) ) {
-			$output .= implode( $lines );
+		if ( count( $subsections ) ) {
+
+			if ( !empty( $named_parameters['paging'] ) && $named_parameters['paging'] !== 'false' ) {
+
+				// we cannot set the visibility in the section's container
+				// itself, because the nested parser function is rendered
+				// independently before the container
+
+				// group according to paging
+				// eg. 5 sections
+				// true = 1, 1, 1, 1, 1
+				// 2, 2, 1
+				// 2, 2 = 2, 2, 1
+				// 2, 3
+				// 2, 4 = 2, 3
+				// 6, 1 = 5
+
+				if ( $named_parameters['paging'] === 'true' ) {
+					$split = array_fill( 0, count( $subsections ), 1 );
+
+				} else {
+					$split = preg_split( "/\s*,\s*/", $named_parameters['paging'] );
+				}
+
+				$n = 0;
+
+				foreach ( $split as $i => $value ) {
+					$output .= '<div class="ci_form_section_display_' . $i . '" style="display:' . ( $i > 0 ? 'none' : 'block' ) . '">' . implode( array_slice( $subsections, $n, $value ) ) . '</div>';
+					$n += $value;
+				}
+
+			} else {
+				$output .= implode( $subsections );
+			}
+
 		}
 
 		$output .= '</div>';
 		$output .= '<div class="ci_form_section_submit">';
 
-		$hidden_fields = [ 'title', 'submission groups', 'submit', 'success message', 'error message' ];
+		$hidden_fields = [ 'title', 'submission groups', 'submit', 'success message', 'error message', 'paging', 'success page', 'error page' ];
 
 		foreach ( $hidden_fields as $value ) {
 			$output .= self::hidden_input( 'form_' . str_replace( ' ', '-', $value ), $named_parameters[$value] );
@@ -234,7 +283,17 @@ class CIForms {
 		$output .= self::hidden_input( 'form_pagename', $title->getText() );
 		$output .= self::hidden_input( 'form_pageid', $title->getArticleID() );
 
-		$output .= '<input class="ci_form_input_submit" type="submit" value="Submit">';
+		if ( empty( $named_parameters['paging'] ) || $named_parameters['paging'] === 'false' ) {
+			$output .= '<input class="ci_form_input_submit" type="submit" value="' . ( !empty( $named_parameters['submit text'] ) ? htmlspecialchars( $named_parameters['submit text'] ) : wfMessage( 'ci-forms-submit' )->text() ) . '">';
+
+		} else {
+			$output .= '<div style="text-align:right">';
+			$output .= '<button style="display:none" type="button" class="ci_form_input_navigation_back">' . ( !empty( $named_parameters['navigation back'] ) ? htmlspecialchars( $named_parameters['navigation back'] ) : wfMessage( 'ci-forms-navigation-back' )->text() ) . '</button>';
+			$output .= '<button class="ci_form_input_navigation_next">' . ( !empty( $named_parameters['navigation next'] ) ? htmlspecialchars( $named_parameters['navigation next'] ) : wfMessage( 'ci-forms-navigation-next' )->text() ) . '</button>';
+			$output .= '<input style="display:none" class="ci_form_input_submit" type="submit" value="' . ( !empty( $named_parameters['submit text'] ) ? htmlspecialchars( $named_parameters['submit text'] ) : wfMessage( 'ci-forms-submit' )->text() ) . '">';
+			$output .= '</div>';
+		}
+
 		$output .= '</div>';
 		$output .= '</div>';
 		$output .= '<div class="ci_form_section_captcha">';
@@ -265,7 +324,7 @@ class CIForms {
 		&$named_parameters,
 		&$set_named_parameters
 	) {
-		$lines = [];
+		$body = [];
 		// $set_named_parameters = [];
 		$unique_id = uniqid();
 
@@ -297,7 +356,7 @@ class CIForms {
 
 			if ( strpos( $value_, '=' ) !== false ) {
 				list( $parameter_key, $parameter_value ) = explode( '=', $value_, 2 );
-				$parameter_key = trim( str_replace( '_', ' ', $parameter_key ) );
+				$parameter_key = trim( str_replace( [ '_', '-' ], ' ', $parameter_key ) );
 
 				if ( array_key_exists( $parameter_key, $named_parameters ) ) {
 					$parameter_value =
@@ -311,9 +370,9 @@ class CIForms {
 					continue;
 				}
 			}
-			$lines[] = $value;
+			$body[] = $value;
 		}
-		return $lines;
+		return $body;
 	}
 
 	/**
@@ -362,7 +421,7 @@ class CIForms {
 			'type' => 'inputs',
 			// 'inputs', 'inputs resposive', 'multiple choice', 'cloze', 'cloze-test'
 			'title' => null,
-			'list-type' => 'none',
+			'list type' => 'none',
 			// 'unordered', 'letters', 'numbers' + standard values
 			'max answers' => 1,
 			'min answers' => null,	// number or percent, for multiple choice questions if max answers > 1, default 1/2 +1
@@ -370,7 +429,7 @@ class CIForms {
 			// if multiple choice
 		];
 		$set_named_parameters = [];
-		$lines = self::parse_function_arguments( $argv, $named_parameters, $set_named_parameters );
+		$body = self::parse_function_arguments( $argv, $named_parameters, $set_named_parameters );
 
 		// alias
 		if ( $named_parameters['type'] == 'cloze' ) {
@@ -383,9 +442,9 @@ class CIForms {
 		}
 
 		// cloze test list type default value
-		if ( !in_array( 'list-type', $set_named_parameters ) &&
+		if ( !in_array( 'list type', $set_named_parameters ) &&
 			$named_parameters['type'] == 'cloze test' ) {
-			$named_parameters['list-type'] = 'ordered';
+			$named_parameters['list type'] = 'ordered';
 		}
 
 		$unique_id = uniqid();
@@ -396,10 +455,10 @@ class CIForms {
 		switch ( $named_parameters['type'] ) {
 			case 'cloze test':
 			case 'multiple choice':
-				if ( in_array( $named_parameters['list-type'], self::$ordered_styles ) ) {
-					$list_style = $named_parameters['list-type'];
+				if ( in_array( $named_parameters['list type'], self::$ordered_styles ) ) {
+					$list_style = $named_parameters['list type'];
 				} else {
-					switch ( $named_parameters['list-type'] ) {
+					switch ( $named_parameters['list type'] ) {
 						case 'letters':
 							$list_style = 'upper-latin';
 							break;
@@ -420,10 +479,10 @@ class CIForms {
 
 				if ( $named_parameters['type'] == 'multiple choice' ) {
 					$output .= self::hidden_input( $unique_id . '_section_multiple-choice-max-answers', $named_parameters['max answers'] );
+				}
 
-					if ( (int)$named_parameters['max answers'] > 1 ) {
-						$output .= self::hidden_input( $unique_id . '_section_multiple-choice-min-answers', $named_parameters['min answers'] );
-					}
+				if ( (int)$named_parameters['max answers'] > 1 || $named_parameters['type'] == 'cloze test' ) {
+					$output .= self::hidden_input( $unique_id . '_section_multiple-choice-min-answers', $named_parameters['min answers'] );
 				}
 				break;
 			case 'inputs':
@@ -448,7 +507,7 @@ class CIForms {
 			case 'inputs':
 			case 'inputs responsive':
 				$n = 0;
-				foreach ( $lines as $value ) {
+				foreach ( $body as $value ) {
 					$output .= '<div class="ci_form_section_inputs_row">';
 					$output .= '<div class="ci_form_section_inputs_col' .
 						( $named_parameters['type'] == 'inputs responsive' ? '-25' : '' ) . '">';
@@ -473,7 +532,7 @@ class CIForms {
 								self::ci_form_parse_input_symbol( $matches[2] ) + [ null, null, null ];
 
 							$required =
-								( !empty( $matches[3] ) ? ' data-required="1" required' : '' );
+								( !empty( $matches[3] ) ? ' data-required="1"' : '' );
 
 							// @phan-suppress-next-line PhanRedundantCondition
 							if ( $required && !empty( $placeholder ) ) {
@@ -586,9 +645,9 @@ class CIForms {
 
 				$output .= ( $named_parameters['max answers'] > 1
 					? '<input class="radio_for_required_checkboxes" type="radio" name="' .
-					uniqid() . '" required/>' : '' );
+					uniqid() . '" data-required="1" />' : '' );
 
-				foreach ( $lines as $key => $value ) {
+				foreach ( $body as $key => $value ) {
 					$output .= '<li>';
 					$output .= self::hidden_input( $unique_id . '_items_' . $n . '_label', $value );
 
@@ -598,7 +657,7 @@ class CIForms {
 						'selected" type="' .
 						( $named_parameters['max answers'] == 1 ? 'radio' : 'checkbox' ) .
 						'" value="' . $n . '"' .
-						( $named_parameters['max answers'] == 1 ? ' required' : '' ) . ' />';
+						( $named_parameters['max answers'] == 1 ? ' data-required="1"' : '' ) . ' />';
 
 					$i = 0;
 
@@ -624,7 +683,7 @@ class CIForms {
 				$items = [];
 				$answers = [];
 
-				foreach ( $lines as $key => $value ) {
+				foreach ( $body as $key => $value ) {
 					$example = false;
 
 					$value = trim( $value );

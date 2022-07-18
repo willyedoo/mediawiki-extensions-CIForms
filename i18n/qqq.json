@@ -44,5 +44,14 @@
 
 	"ci-forms-email-content": "A label message",
 	"ci-forms-email-filename": "A label message",
-	"ci-forms-try-again-message": "A label message"
+	"ci-forms-try-again-message": "A label message",
+
+	"ci-forms-submit": "A label message",
+	"ci-forms-navigation-next": "A label message",
+	"ci-forms-navigation-back": "A label message",
+	"ci-forms-validation-msg1": "A label message",
+	"ci-forms-validation-msg2": "A label message",
+	"ci-forms-validation-msg3": "A label message",
+	"ci-forms-manage-pager-header-username": "A label message",
+	"ci-forms-manage-pager-button-export": "A label message"
 }

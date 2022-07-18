@@ -165,6 +165,35 @@
 	border-color: #447ff5;
 }
 
+.ci_form_input_navigation_next {
+	background: #54ba41;
+	border: 1px solid #42a031;
+	padding: 6px 12px;
+	color: #fff;
+	font-weight: bold;
+	cursor: pointer;
+}
+
+.ci_form_input_navigation_next:hover {
+	background-color: #61d44b;
+	border-color: #61d44b;
+}
+
+.ci_form_input_navigation_back {
+	background: #aaa;
+	border: 1px solid #999;
+	padding: 6px 12px;
+	color: #fff;
+	font-weight: bold;
+	cursor: pointer;
+	margin-right: 4px;
+}
+
+.ci_form_input_navigation_back:hover {
+	background-color: #cacaca;
+	border-color: #cacaca;
+}
+
 .ci_form {
 	background: #f5f5f5;
 	border: 1px solid #ccc;

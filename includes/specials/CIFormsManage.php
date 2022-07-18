@@ -38,6 +38,8 @@ class CIFormsManage extends QueryPage {
 	private $headers;
 	private $entry;
 	private $userGroups;
+	private $dbType;
+	private $escapedDBprefix;
 
 	/**
 	 * @param string $name
@@ -77,6 +79,18 @@ class CIFormsManage extends QueryPage {
 			$this->downloadPdf( $download );
 		}
 
+		global $wgDBprefix;
+
+		$dbr = wfGetDB( DB_REPLICA );
+		$this->dbType = $dbr->getType();
+		$this->escapedDBprefix = ( $wgDBprefix ? preg_replace( '/[^A-Za-z0-9_ ]+/', '', $wgDBprefix ) : '' );
+
+		$export = $request->getVal( 'export' );
+
+		if ( !empty( $export ) ) {
+			$this->export( $export );
+		}
+
 		$out = $this->getOutput();
 		$out->addModuleStyles( $this->getModuleStyles() );
 		$out->enableOOUI();
@@ -113,6 +127,11 @@ class CIFormsManage extends QueryPage {
 		if ( !$this->isCached() ) {
 			# select one extra row for navigation
 			$res = $this->reallyDoQuery( $dbLimit, $this->offset );
+
+			// ***edited
+			if ( !empty( $this->form_title ) ) {
+				$res = $this->mockupResults( $res );
+			}
 		} else {
 			# Get the cached result, select one extra row for navigation
 			$res = $this->fetchFromCache( $dbLimit, $this->offset );
@@ -217,6 +236,21 @@ class CIFormsManage extends QueryPage {
 	}
 
 	/**
+	 * @param string $sql
+	 * @param bool $raw
+	 * @return string
+	 */
+	private function sqlReplace( $sql, $raw = false ) {
+		$dbr = wfGetDB( DB_REPLICA );
+
+		if ( $this->dbType == 'postgres' ) {
+			$sql = str_replace( 'CIForms_', 'ciforms_', $sql );
+		}
+
+		return $sql;
+	}
+
+	/**
 	 * @return bool
 	 */
 	private function isSysop() {
@@ -224,9 +258,10 @@ class CIFormsManage extends QueryPage {
 	}
 
 	/**
+	 * @param bool $raw
 	 * @return string
 	 */
-	private function permissionsCond() {
+	private function permissionsCond( $raw ) {
 		$dbr = wfGetDB( DB_REPLICA );
 
 		$userGroups_quoted = implode(
@@ -239,23 +274,26 @@ class CIFormsManage extends QueryPage {
 			)
 		);
 
-		return 'EXISTS (SELECT 1 FROM CIForms_submissions_groups WHERE
-submission_id = CIForms_submissions.id AND usergroup IN(' . $userGroups_quoted . ') )';
+		return $this->sqlReplace( 'EXISTS (SELECT 1 FROM `' . $this->escapedDBprefix . 'CIForms_submissions_groups` WHERE '
+			. 'submission_id = `' . $this->escapedDBprefix . 'CIForms_submissions`.id AND '
+
+			// $userGroups_quoted gives a "false positive" SecurityCheck-SQLInjection
+			. 'usergroup IN(' . $userGroups_quoted . ') )', $raw );
 	}
 
 	/**
-	 * @param array|string $download
+	 * @param string $submission_id
 	 */
-	private function downloadPdf( $download ) {
+	private function downloadPdf( $submission_id ) {
 		$dbr = wfGetDB( DB_REPLICA );
-		$conds = [ 'id' => $download ];
+		$conds = [ 'id' => $submission_id ];
 
 		if ( !$this->isSysop() ) {
-			$conds[] = $this->permissionsCond();
+			$conds[] = $this->permissionsCond( false );
 		}
 
 		$row = $dbr->selectRow(
-			'CIForms_submissions',
+			$this->sqlReplace( 'CIForms_submissions' ),
 			'*',
 			$conds,
 			__METHOD__
@@ -268,8 +306,9 @@ submission_id = CIForms_submissions.id AND usergroup IN(' . $userGroups_quoted .
 		}
 
 		$data = json_decode( $row['data'], true );
-		$file = ( new CIFormsSubmit )->createPDF( $data );
+		$file = ( new CIFormsSubmit )->createPDF( $data, $row['username'], $row['created_at'] );
 
+		// userTimeAndDate
 		$submission_date = htmlspecialchars(
 			$this->getLanguage()->userDate(
 				wfTimestamp( TS_MW, $row['created_at'] ),
@@ -284,6 +323,89 @@ submission_id = CIForms_submissions.id AND usergroup IN(' . $userGroups_quoted .
 		ob_clean();
 
 		exit( $file );
+	}
+
+	/**
+	 * @param string $submission_id
+	 */
+	private function export( $submission_id ) {
+		$dbr = wfGetDB( DB_REPLICA );
+		$conds = [ 'id' => $submission_id ];
+
+		if ( !$this->isSysop() ) {
+			$conds[] = $this->permissionsCond( false );
+		}
+
+		$row = $dbr->selectRow(
+			$this->sqlReplace( 'CIForms_submissions' ),
+			'*',
+			$conds,
+			__METHOD__
+		);
+
+		$row = (array)$row;
+
+		if ( !$row || $row === [ false ] || empty( $row['data'] ) ) {
+			exit( $this->msg( 'ci-forms-manage-download-error' ) );
+		}
+
+		// get all submissions
+		$this->page_id = $row['page_id'];
+		$this->form_title = $row['title'];
+
+		$res = $this->reallyDoQuery( false, false, false );
+		$res = $this->mockupResults( $res, true );
+
+		// this will create $this->headers
+		$this->openList( 0 );
+
+		ob_clean();
+
+		$output = fopen( "php://output", 'w' );
+
+		if ( $output === false ) {
+			exit( "Can't open php://output" );
+		}
+
+		if ( array_key_last( $this->headers ) == 'pdf' ) {
+			array_pop( $this->headers );
+		}
+
+		fputcsv( $output, $this->headers );
+
+		unset( $this->headers['entry'], $this->headers['username'], $this->headers['submission_date'] );
+
+		$n = 0;
+		foreach ( $res as $key => $row ) {
+			$n++;
+			$row = (array)$row;
+
+			// php < 7.4
+			$csv_line = [ $n, $row['username'] ];
+			$csv_line = array_merge( $csv_line, array_values( array_intersect_key( $row, $this->headers ) ) );
+			$csv_line[] = $row['created_at'];
+			fputcsv( $output, $csv_line );
+
+			// php 7.4
+			// fputcsv( $output, [ $n, $row['username'], ...array_values( array_intersect_key( $row, $this->headers ) ),  $row['created_at'] ] );
+
+		}
+
+		$submission_date = htmlspecialchars(
+			$this->getLanguage()->userDate(
+				wfTimestamp( TS_MW ),
+				$this->getUser()
+			)
+		);
+
+		header( 'Content-Type: application/csv' );
+		header( 'Content-Transfer-Encoding: Binary' );
+		header( 'Content-disposition: attachment; filename="' . $row['title'] . ' - ' . $submission_date . '.csv"' );
+
+		// ob_clean();
+
+		fclose( $output ) || die( "Can't close php://output" );
+		exit();
 	}
 
 	/**
@@ -368,16 +490,18 @@ submission_id = CIForms_submissions.id AND usergroup IN(' . $userGroups_quoted .
 	/**
 	 * @param int|bool $limit Numerical limit or false for no limit
 	 * @param int|bool $offset Numerical offset or false for no offset
-	 * @return IResultWrapper|FakeResultWrapper
+	 * @param bool $DESC
+	 * @return IResultWrapper
 	 * @since 1.18
 	 */
-	public function reallyDoQuery( $limit, $offset = false ) {
+	public function reallyDoQuery( $limit, $offset = false, $DESC = true ) {
 		$fname = static::class . '::reallyDoQuery';
 		$dbr = $this->getRecacheDB();
 		$query = $this->getQueryInfo();
 		$order = $this->getOrderFields();
 
-		if ( $this->sortDescending() ) {
+		// if ( $this->sortDescending() ) {
+		if ( $DESC ) {
 			foreach ( $order as &$field ) {
 				$field .= ' DESC';
 			}
@@ -410,28 +534,33 @@ submission_id = CIForms_submissions.id AND usergroup IN(' . $userGroups_quoted .
 			$sql = $this->getSQL();
 			$sql .= ' ORDER BY ' . implode( ', ', $order );
 
-			$sql = $dbr->limitResult( $sql, $limit, $offset );
-			// phpcs:ignore MediaWiki.Usage.DbrQueryUsage.DbrQueryFound
+			if ( $limit !== false ) {
+				$sql = $dbr->limitResult( $sql, $limit, $offset );
+			}
+
+			// phpcs:ignore MediaWiki.Usage.DbrQueryUsage.DbrQueryFound, @phan-suppress-next-line SecurityCheck-SQLInjection
 			$res = $dbr->query( $sql, $fname );
 		}
 
-		if ( empty( $this->form_title ) ) {
-			return $res;
-		}
+		return $res;
+	}
 
-		// mockup results
-		// and update "shown" field
-
+	/**
+	 * @param IResultWrapper $res
+	 * @param bool $export
+	 * @return FakeResultWrapper
+	 */
+	protected function mockupResults( $res, $export = false ) {
 		$dbr = wfGetDB( DB_MASTER );
 		$valid_results = [];
 		foreach ( $res as $key => $row ) {
 			if ( !empty( $row->data ) ) {
 				$data = json_decode( $row->data, true );
-				$valid_results[] = array_merge( (array)$row, $this->parseFormData( $data ) );
+				$valid_results[] = array_merge( (array)$row, $this->parseFormData( $data, !$export ) );
 
-				if ( empty( $row->shown ) ) {
+				if ( !$export && empty( $row->shown ) ) {
 					$date = date( 'Y-m-d H:i:s' );
-					$update_result = $dbr->update( 'CIForms_submissions', [ 'shown' => $date ], [ 'id' => $row->id ], __METHOD__ );
+					$update_result = $dbr->update( $this->sqlReplace( 'CIForms_submissions' ), [ 'shown' => $date ], [ 'id' => $row->id ], __METHOD__ );
 				}
 			}
 		}
@@ -446,27 +575,22 @@ submission_id = CIForms_submissions.id AND usergroup IN(' . $userGroups_quoted .
 		$dbr = wfGetDB( DB_REPLICA );
 
 		if ( empty( $this->form_title ) ) {
-			$sql = 'SELECT CIForms_submissions.*,
-COUNT(*) as submissions,
-(SELECT MAX(created_at)
-      FROM CIForms_submissions as b
-      WHERE b.title = CIForms_submissions.title
-' . ( $this->isSysop() ? '' : 'AND ' . $this->permissionsCond() ) . '
-   ) as last_submission_date,
-SUM(CASE WHEN shown IS NULL THEN 1 ELSE 0 END) as new
-FROM CIForms_submissions
-' . ( $this->isSysop() ? '' : ' WHERE ' . $this->permissionsCond() ) . '
-GROUP BY CIForms_submissions.page_id, CIForms_submissions.title
+			$sql = 'SELECT MAX(id) AS id, page_id, title, MAX(created_at) AS last_submission_date, COUNT(*) AS submissions,
+SUM(CASE WHEN shown IS NULL THEN 1 ELSE 0 END) AS new
+FROM `' . $this->escapedDBprefix . 'CIForms_submissions' . '` 
+' . ( $this->isSysop() ? '' : ' WHERE ' . $this->permissionsCond( true ) ) .
+'GROUP BY page_id, title
 ';
+
 		} else {
-			$sql = 'SELECT CIForms_submissions.*
-FROM CIForms_submissions
+			$sql = 'SELECT *
+FROM `' . $this->escapedDBprefix . 'CIForms_submissions' . '`
 WHERE page_id = ' . $dbr->addQuotes( $this->page_id ) . '
 AND title = ' . $dbr->addQuotes( $this->form_title )
-. ( $this->isSysop() ? '' : ' AND ' . $this->permissionsCond() );
+. ( $this->isSysop() ? '' : ' AND ' . $this->permissionsCond( true ) );
 		}
 
-		return $sql;
+		return $this->sqlReplace( $sql, true );
 	}
 
 	/**
@@ -508,11 +632,11 @@ AND title = ' . $dbr->addQuotes( $this->form_title )
 			$conds = [ 'page_id' => $this->page_id, 'title' => $this->form_title ];
 
 			if ( !$this->isSysop() ) {
-				$conds[] = $this->permissionsCond();
+				$conds[] = $this->permissionsCond( false );
 			}
 
 			$row = $dbr->selectRow(
-				'CIForms_submissions',
+				$this->sqlReplace( 'CIForms_submissions' ),
 				'*',
 				$conds,
 				__METHOD__,
@@ -525,6 +649,7 @@ AND title = ' . $dbr->addQuotes( $this->form_title )
 				$data = json_decode( $row['data'], true );
 				$headers = [];
 				$headers['entry'] = $this->msg( 'ci-forms-manage-pager-header-entry' )->text();
+				$headers['username'] = $this->msg( 'ci-forms-manage-pager-header-username' )->text();
 				$keys = array_keys( $this->parseFormData( $data ) );
 
 				foreach ( $keys as $val ) {
@@ -657,6 +782,13 @@ AND title = ' . $dbr->addQuotes( $this->form_title )
 								'infusable' => true,
 								'flags' => [ 'progressive', 'primary' ]
 							]
+						) . new OOUI\ButtonWidget(
+							[
+								'href' => wfAppendQuery( $url, 'export=' . $result['id'] ),
+								'label' => $this->msg( 'ci-forms-manage-pager-button-export' )->text(),
+								'infusable' => true,
+								'flags' => [ 'progressive', 'primary' ]
+							]
 						);
 						break;
 					default:
@@ -666,6 +798,9 @@ AND title = ' . $dbr->addQuotes( $this->form_title )
 				switch ( $key ) {
 					case 'entry':
 						$formatted = $this->entry;
+						break;
+					case 'username':
+						$formatted = $result['username'];
 						break;
 					case 'submission_date':
 						$formatted = htmlspecialchars(
@@ -707,9 +842,10 @@ AND title = ' . $dbr->addQuotes( $this->form_title )
 
 	/**
 	 * @param array $data
+	 * @param bool $html
 	 * @return array
 	 */
-	private function parseFormData( $data ) {
+	private function parseFormData( $data, $html = true ) {
 		$array = [];
 		$output = [];
 		$a = 0;
@@ -732,13 +868,12 @@ AND title = ' . $dbr->addQuotes( $this->form_title )
 						// @phan-suppress-next-line PhanPluginUseReturnValueInternalKnown
 						preg_replace_callback(
 							'/([^\[\]]*)\[([^\[\]]*)\]\s*(\*)?/',
-							static function ( $matches ) use ( &$i, $value, &$array ) {
+							static function ( $matches ) use ( &$i, $value, &$array, $html ) {
 								$label = $matches[1];
 								// use input type as label if label is missing
 								if ( empty( $label ) ) {
 									list( $input_type, $placeholder, $input_options ) = CIForms::ci_form_parse_input_symbol( $matches[2] ) + [ null, null, null ];
-
-									$label = ( $placeholder ?: '<em>' . $input_type . '</em>' );
+									$label = ( $placeholder ?: ( $html ? '<em>' . $input_type . '</em>' : $input_type ) );
 								}
 								$array[] = [ trim( $label ), $value['inputs'][$i] ];
 								$i++;
@@ -756,7 +891,7 @@ AND title = ' . $dbr->addQuotes( $this->form_title )
 							$value_[] = ( $key + 1 ) . ( !empty( $value['inputs'] ) ? ' (' . implode( ' &ndash; ', $value['inputs'] ) . ')' : '' );
 						}
 					}
-					$array[] = [ 'multiple choice #' . $a, implode( '<br />', $value_ ) ];
+					$array[] = [ 'multiple choice #' . $a, implode( ( $html ? '<br />' : "\n" ), $value_ ) ];
 					break;
 				case 'cloze test':
 					$b++;
@@ -773,17 +908,29 @@ AND title = ' . $dbr->addQuotes( $this->form_title )
 							continue;
 						}
 
-						$value_[] = '<li>' . ( !empty( $value['inputs'] ) ? implode( ' &ndash; ', $value['inputs'] ) : '' ) . '</li>';
+						$value_[] = ( $html ? '<li>' : "" ) . ( !empty( $value['inputs'] ) ? implode( ' &ndash; ', $value['inputs'] ) : '' ) . ( $html ? '</li>' : "" );
+
 					}
 					$list_type_ordered = in_array( $section['list-style'], CIForms::$ordered_styles );
-					$array[] = [ 'cloze test #' . $b, '<' . ( !$list_type_ordered ? 'ul' : 'ol' ) . ' style="list-style:' . $section['list-style'] . '">' . implode( $value_ ) . '</' . ( !$list_type_ordered ? 'ul' : 'ol' ) . '>' ];
+
+					if ( $html ) {
+						$array[] = [ 'cloze test #' . $b, '<' . ( !$list_type_ordered ? 'ul' : 'ol' ) . ' style="list-style:' . $section['list-style'] . '">' . implode( $value_ ) . '</' . ( !$list_type_ordered ? 'ul' : 'ol' ) . '>' ];
+
+					} else {
+						$i = 0;
+						$array[] = [ 'cloze test #' . $b, implode( "\n", !$list_type_ordered ? $value_ : array_map( static function ( $value ) use ( &$i ) {
+							return ( ++$i ) . ". " . $value;
+						}, $value_ ) ) ];
+					}
+
 					break;
 			}
 		}
 
 		foreach ( $array as $value ) {
-			$output[ $value[0] ] = $value[1];
+			$output[ $value[0] ] = ( $html ? addslashes( $value[1] ) : $value[1] );
 		}
+
 		return $output;
 	}
 

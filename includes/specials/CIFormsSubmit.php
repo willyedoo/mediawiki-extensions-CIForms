@@ -29,6 +29,9 @@ if ( is_readable( __DIR__ . '/../../vendor/autoload.php' ) ) {
 }
 
 class CIFormsSubmit extends SpecialPage {
+
+	private $dbType;
+
 	public function __construct() {
 		// not listed in the special pages index
 		parent::__construct( 'CIFormsSubmit', '', false );
@@ -78,19 +81,22 @@ class CIFormsSubmit extends SpecialPage {
 				return $this->exit( $out,
 					$this->msg( $message, $captcha_message, $senderEmail )
 						. ( $senderEmail ? "\040" . $this->msg( ' ci-forms-try-again-message', $senderEmail ) : '' ),
-					null );
+					null, null );
 			}
 		}
 
 		$form_result = $this->parseForm( $post );
 
 		if ( empty( $form_result['form_values'] ) ) {
-			return $this->exit( $out, "no submission data", null );
+			return $this->exit( $out, "no submission data", null, null );
 		}
 
-		$row_inserted = $this->storeSubmission( $form_result );
+		$dbr = wfGetDB( DB_REPLICA );
+		$this->dbType = $dbr->getType();
 
-		$formSubmit = self::mergeGlobal( 'submit', $form_result['form_values'] );
+		$row_inserted = $this->storeSubmission( $form_result, $username );
+
+		$formSubmit = self::mergeGlobal( 'submit', $form_result['form_values'], $isLocal );
 
 		$submit_valid = [];
 
@@ -100,8 +106,10 @@ class CIFormsSubmit extends SpecialPage {
 			}
 		}
 
+		$success = false;
+
 		if ( !$wgEnableEmail || empty( $submit_valid ) || !class_exists( 'PHPMailer\PHPMailer\PHPMailer' ) || !class_exists( 'Dompdf\Dompdf' ) ) {
-			return $this->exit( $out, $this->exit_message( $form_result, $row_inserted, false, false ), $form_result['form_values']['pagename'] );
+			return $this->exit( $out, $this->exit_message( $form_result, $row_inserted, false, false, $success ), $form_result['form_values'], $success );
 		}
 
 		$subject = $this->msg( 'ci-forms-email-subject', $form_result['form_values']['title'], $wgSitename );
@@ -114,7 +122,7 @@ class CIFormsSubmit extends SpecialPage {
 
 		$message_body .= "<br /><br /><br />" . $this->msg( 'ci-forms-credits' );
 
-		$attachment = $this->createPDF( $form_result );
+		$attachment = $this->createPDF( $form_result, $username, date( 'Y-m-d H:i:s' ) );
 
 		// https://github.com/PHPMailer/PHPMailer/blob/master/examples/sendmail.phps
 
@@ -149,16 +157,21 @@ class CIFormsSubmit extends SpecialPage {
 			$result_success = false;
 		}
 
-		$this->exit( $out, $this->exit_message( $form_result, $row_inserted, true, $result_success ), $form_result['form_values']['pagename'] );
+		$this->exit( $out, $this->exit_message( $form_result, $row_inserted, true, $result_success, $success ), $form_result['form_values'], $success );
 	}
 
 	/**
 	 * @param array $form_result
+	 * @param string &$username
 	 * @return bool
 	 */
-	private function storeSubmission( $form_result ) {
+	private function storeSubmission( $form_result, &$username ) {
+		$user = RequestContext::getMain()->getUser();
+		$username = $user->getName();
+
 		$update_obj = [
 			'title' => $form_result['form_values']['title'],
+			'username' => $username,
 			'page_id' => $form_result['form_values']['pageid'],
 			'data' => json_encode( $form_result ),
 			'created_at' => date( 'Y-m-d H:i:s' )
@@ -167,11 +180,11 @@ class CIFormsSubmit extends SpecialPage {
 		$dbr = wfGetDB( DB_MASTER );
 
 		$row_inserted = $dbr->insert(
-			'CIForms_submissions',
+			$this->sqlReplace( 'CIForms_submissions' ),
 			$update_obj
 		);
 
-		$SubmissionGroups = self::mergeGlobal( 'submission-groups', $form_result['form_values'] );
+		$SubmissionGroups = self::mergeGlobal( 'submission-groups', $form_result['form_values'], $isLocal );
 
 		// store submissions groups
 		if ( !empty( $SubmissionGroups ) ) {
@@ -193,7 +206,7 @@ class CIFormsSubmit extends SpecialPage {
 			// to the submissions
 			if ( !empty( $groups ) ) {
 				$latest_id = $dbr->selectField(
-					'CIForms_submissions',
+					$this->sqlReplace( 'CIForms_submissions' ),
 					'id',
 					[],
 					__METHOD__,
@@ -202,7 +215,7 @@ class CIFormsSubmit extends SpecialPage {
 
 				foreach ( $groups as $value ) {
 					$row_inserted_ = $dbr->insert(
-						'CIForms_submissions_groups',
+						$this->sqlReplace( 'CIForms_submissions_groups' ),
 						[
 							'submission_id' => $latest_id,
 							'usergroup' => $value,
@@ -216,28 +229,46 @@ class CIFormsSubmit extends SpecialPage {
 	}
 
 	/**
+	 * @param string $sql
+	 * @param bool $raw
+	 * @return string
+	 */
+	private function sqlReplace( $sql, $raw = false ) {
+		$dbr = wfGetDB( DB_REPLICA );
+
+		if ( $this->dbType == 'postgres' ) {
+			$sql = str_replace( 'CIForms_', 'ciforms_', $sql );
+		}
+
+		return $sql;
+	}
+
+	/**
 	 * @param string $name
 	 * @param array $form_result
+	 * @param bool &$isLocal
 	 * @return string|array|null
 	 */
-	protected function mergeGlobal( $name, $form_result ) {
+	protected function mergeGlobal( $name, $form_result, &$isLocal ) {
 		$types = [
 			'wgCIFormsSubmissionGroups' => 'array',
 			'wgCIFormsSubmitEmail' => 'array',
 			'wgCIFormsSuccessMessage' => 'string',
 			'wgCIFormsErrorMessage' => 'string',
+			'wgCIFormsSuccessPage' => 'string',
+			'wgCIFormsErrorPage' => 'string',
 		];
 
-		$map = [ 'submission-groups', 'submit', 'success-message', 'error-message' ];
+		$map = [ 'submission-groups', 'submit', 'success-message', 'error-message', 'success-page', 'error-page' ];
 
 		$keys = array_keys( $types );
 		$key = array_search( $name, $map );
 		$globalName = $keys[$key];
-		$globalMode = $GLOBALS[$globalName . 'GlobalMode'];
+		$globalMode = ( !empty( $GLOBALS[$globalName . 'GlobalMode'] ) ? $GLOBALS[$globalName . 'GlobalMode'] : CIFORMS_VALUE_IF_NULL );
 		$local = $form_result[$name];
 
 		// avoid "SecurityCheck-XSS Calling method \CIFormsSubmit::exit() in \CIFormsSubmit::execute that outputs using tainted argument #2."
-		$global = htmlspecialchars( $GLOBALS[$globalName] );
+		$global = ( !empty( $GLOBALS[$globalName] ) ? htmlspecialchars( $GLOBALS[$globalName] ) : "" );
 
 		$output = ( $types[$globalName] == 'array' ? [] : null );
 
@@ -266,12 +297,14 @@ class CIFormsSubmit extends SpecialPage {
 
 			// *** not clear if it does make sense
 			} else {
+				$isLocal = true;
 				$output = $local . "\040" . $output;
 			}
 
 			return $output;
 		}
 
+		$isLocal = true;
 		return $local;
 	}
 
@@ -280,14 +313,16 @@ class CIFormsSubmit extends SpecialPage {
 	 * @param bool $row_inserted
 	 * @param bool $dispatch
 	 * @param bool $dispatched
+	 * @param bool &$success
 	 * @return string
 	 */
-	protected function exit_message( $form_result, $row_inserted, $dispatch, $dispatched ) {
-		$errorMessage = self::mergeGlobal( 'error-message', $form_result['form_values'] );
-		$successMessage = self::mergeGlobal( 'success-message', $form_result['form_values'] );
+	protected function exit_message( $form_result, $row_inserted, $dispatch, $dispatched, &$success ) {
+		$errorMessage = self::mergeGlobal( 'error-message', $form_result['form_values'], $isLocal );
+		$successMessage = self::mergeGlobal( 'success-message', $form_result['form_values'], $isLocal );
 
 		if ( !$dispatch ) {
 			if ( $row_inserted ) {
+				$success = true;
 				return ( $successMessage ?: $this->msg( 'ci-forms-data-saved' ) );
 
 			} else {
@@ -296,25 +331,29 @@ class CIFormsSubmit extends SpecialPage {
 		}
 
 		if ( $dispatched ) {
+			$success = true;
 			return ( $successMessage ?: $this->msg( 'ci-forms-dispatch-success' ) );
 		}
 
 		if ( $row_inserted ) {
+			$success = true;
 			return ( $successMessage ?: $this->msg( 'ci-forms-data-saved' ) );
 		}
 
 		// we don't use "ci-forms-dispatch-error-contact"
 		// and "ci-forms-dispatch-error"anymore because we fallback
 		// to $dispatch = false
-		$formSubmit = self::mergeGlobal( 'submit', $form_result['form_values'] );
+		$formSubmit = self::mergeGlobal( 'submit', $form_result['form_values'], $isLocal );
 		return ( $errorMessage ?: $this->msg( 'ci-forms-data-not-saved-contact', implode( ', ', $formSubmit ) ) );
 	}
 
 	/**
 	 * @param array $form_result
+	 * @param string $username
+	 * @param string $datetime
 	 * @return string
 	 */
-	public function createPDF( $form_result ) {
+	public function createPDF( $form_result, $username, $datetime ) {
 		$css_path = __DIR__ . '/../../resources/style.css';
 
 		$form_output_html = '';
@@ -339,10 +378,25 @@ class CIFormsSubmit extends SpecialPage {
 		$form_output_html .= '.ci_form ol li::before, .ci_form ul li::before { content: ""; }';
 		$form_output_html .= '</style>';
 		$form_output_html .= '<head><body>';
+
 		$form_output_html .= $this->create_output(
 			$form_result['form_values'],
 			$form_result['sections']
 		);
+
+		// create table with
+		// wiki name, page title, username, date time
+
+		global $wgSitename;
+
+		$form_output_html .= '<br /><br />';
+		$form_output_html .= '<table border="1" style="width:100%;border: 1px solid #aaa;border-collapse:collapse;border-spacing:0;">';
+		$form_output_html .= "<tr><td style=\"font-weight:bold\">wiki</td><td>$wgSitename</td></tr>";
+		$form_output_html .= "<tr><td style=\"font-weight:bold\">page</td><td><a href=\"" . Title::newFromText( $form_result['form_values']['pagename'] )->getFullURL() . "\">{$form_result['form_values']['pagename']}</a></td></tr>";
+		$form_output_html .= "<tr><td style=\"font-weight:bold\">username</td><td>$username</td></tr>";
+		$form_output_html .= "<tr><td style=\"font-weight:bold\">date</td><td>$datetime</td></tr>";
+		$form_output_html .= "</table>";
+
 		$form_output_html .= '<br /><br /><br /><br /><br />';
 		$form_output_html .= $this->msg( 'ci-forms-credits' );
 		$form_output_html .= '</body></html>';
@@ -370,13 +424,39 @@ class CIFormsSubmit extends SpecialPage {
 	/**
 	 * @param OutputPage $out
 	 * @param string $message
-	 * @param string|null $pagename
+	 * @param null|array $form_values
+	 * @param null|bool $success
 	 */
-	protected function exit( $out, $message, $pagename ): void {
-		if ( !empty( $pagename ) ) {
+	protected function exit( $out, $message, $form_values, $success ): void {
+		if ( $success !== null ) {
+			$errorPage = self::mergeGlobal( 'error-page', $form_values, $isLocal );
+			$successPage = self::mergeGlobal( 'success-page', $form_values, $isLocal );
+			$errorMessage = self::mergeGlobal( 'error-message', $form_values, $errorMessageIsLocal );
+			$successMessage = self::mergeGlobal( 'success-message', $form_values, $successMessageIsLocal );
+
+			if ( !$success && $errorPage && ( !$errorMessage || !$errorMessageIsLocal ) ) {
+				$title = Title::newFromText( $errorPage );
+
+				if ( $title && $title->isKnown() ) {
+					header( 'Location: ' . $title->getLocalURL() );
+					exit();
+				}
+			}
+
+			if ( $success && $successPage && ( !$successMessage || !$successMessageIsLocal ) ) {
+				$title = Title::newFromText( $successPage );
+
+				if ( $title && $title->isKnown() ) {
+					header( 'Location: ' . $title->getLocalURL() );
+					exit();
+				}
+			}
+		}
+
+		if ( !empty( $form_values['pagename'] ) ) {
 			$out->addWikiMsg(
 				'ci-forms-manage-pager-return',
-				$pagename
+				$form_values['pagename']
 			);
 		}
 
