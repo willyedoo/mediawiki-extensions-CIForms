@@ -439,7 +439,6 @@ class CIFormsSubmit extends SpecialPage {
 
 				if ( $title && $title->isKnown() ) {
 					header( 'Location: ' . $title->getLocalURL() );
-					exit();
 				}
 			}
 
@@ -448,7 +447,6 @@ class CIFormsSubmit extends SpecialPage {
 
 				if ( $title && $title->isKnown() ) {
 					header( 'Location: ' . $title->getLocalURL() );
-					exit();
 				}
 			}
 		}
