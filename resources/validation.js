@@ -16,7 +16,7 @@
  *
  * @file
  * @author thomas-topway-it <thomas.topway.it@mail.com>
- * @copyright Copyright © 2021, https://culturaitaliana.org
+ * @copyright Copyright © 2021-2022, https://wikisphere.org
  */
 
 $( document ).ready( function () {
@@ -73,6 +73,13 @@ $( document ).ready( function () {
 				( paging && paging !== 'false' ?
 					'.ci_form_section_display_' + currentSection[ index ] + ' ' :
 					'' ) + 'input[data-required="1"]'
+			)
+			.prop( 'required', true );
+		$( this )
+			.find(
+				( paging && paging !== 'false' ?
+					'.ci_form_section_display_' + currentSection[ index ] + ' ' :
+					'' ) + 'select[data-required="1"]'
 			)
 			.prop( 'required', true );
 		$( this ).data( 'form-index', index );
@@ -370,6 +377,12 @@ $( document ).ready( function () {
 					.find( '.ci_form_section_display_' + current_section )
 					.find( 'input[data-required="1"]' )
 					.prop( 'required', true );
+
+				$( this )
+					.find( '.ci_form_section_display_' + current_section )
+					.find( 'select[data-required="1"]' )
+					.prop( 'required', true );
+
 			}
 
 			$( form_el )
