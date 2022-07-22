@@ -96,7 +96,12 @@ class CIFormsSubmit extends SpecialPage {
 
 		$row_inserted = $this->storeSubmission( $form_result, $username );
 
-		$formSubmit = self::mergeGlobal( 'submit', $form_result['form_values'], $isLocal );
+		$formSubmit = self::mergeGlobal( 'email-to', $form_result['form_values'], $isLocal );
+
+		// legacy
+		if ( empty( $formSubmit ) ) {
+			$formSubmit = self::mergeGlobal( 'submit', $form_result['form_values'], $isLocal );
+		}
 
 		$submit_valid = [];
 
@@ -184,7 +189,11 @@ class CIFormsSubmit extends SpecialPage {
 			$update_obj
 		);
 
-		$SubmissionGroups = self::mergeGlobal( 'submission-groups', $form_result['form_values'], $isLocal );
+		$SubmissionGroups = self::mergeGlobal( 'data-access', $form_result['form_values'], $isLocal );
+
+		if ( empty( $SubmissionGroups ) ) {
+			$SubmissionGroups = self::mergeGlobal( 'submission-groups', $form_result['form_values'], $isLocal );
+		}
 
 		// store submissions groups
 		if ( !empty( $SubmissionGroups ) ) {
@@ -251,15 +260,17 @@ class CIFormsSubmit extends SpecialPage {
 	 */
 	protected function mergeGlobal( $name, $form_result, &$isLocal ) {
 		$types = [
-			'wgCIFormsSubmissionGroups' => 'array',
-			'wgCIFormsSubmitEmail' => 'array',
+			'wgCIFormsSubmissionGroups' => 'array',	// legacy
+			'wgCIFormsDataAccess' => 'array',
+			'wgCIFormsSubmitEmail' => 'array',	// legacy
+			'wgCIFormsEmailTo' => 'array',
 			'wgCIFormsSuccessMessage' => 'string',
 			'wgCIFormsErrorMessage' => 'string',
 			'wgCIFormsSuccessPage' => 'string',
 			'wgCIFormsErrorPage' => 'string',
 		];
 
-		$map = [ 'submission-groups', 'submit', 'success-message', 'error-message', 'success-page', 'error-page' ];
+		$map = [ 'submission-groups', 'data-access', 'submit', 'email-to', 'success-message', 'error-message', 'success-page', 'error-page' ];
 
 		$keys = array_keys( $types );
 		$key = array_search( $name, $map );
@@ -343,7 +354,17 @@ class CIFormsSubmit extends SpecialPage {
 		// we don't use "ci-forms-dispatch-error-contact"
 		// and "ci-forms-dispatch-error"anymore because we fallback
 		// to $dispatch = false
-		$formSubmit = self::mergeGlobal( 'submit', $form_result['form_values'], $isLocal );
+		$formSubmit = self::mergeGlobal( 'email-to', $form_result['form_values'], $isLocal );
+
+		// legacy
+		if ( empty( $formSubmit ) ) {
+			$formSubmit = self::mergeGlobal( 'submit', $form_result['form_values'], $isLocal );
+		}
+
+		if ( empty( $formSubmit ) ) {
+			return ( $errorMessage ?: $this->msg( 'ci-forms-data-not-saved' ) );
+		}
+
 		return ( $errorMessage ?: $this->msg( 'ci-forms-data-not-saved-contact', implode( ', ', $formSubmit ) ) );
 	}
 

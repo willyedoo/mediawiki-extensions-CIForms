@@ -167,9 +167,11 @@ class CIForms {
 		self::$loadModule = true;
 
 		$named_parameters = [
-			'submit' => null,
+			'submit' => null,	// legacy
+			'email to' => null,
 			'title' => null,
-			'submission groups' => null,
+			'submission groups' => null,	// legacy
+			'data access' => null,
 			'success message' => null,
 			'error message' => null,
 			'success page' => null,
@@ -268,7 +270,7 @@ class CIForms {
 		$output .= '</div>';
 		$output .= '<div class="ci_form_section_submit">';
 
-		$hidden_fields = [ 'title', 'submission groups', 'submit', 'success message', 'error message', 'paging', 'success page', 'error page' ];
+		$hidden_fields = [ 'title', 'submission groups', 'data access', 'submit', 'email to', 'success message', 'error message', 'paging', 'success page', 'error page' ];
 
 		foreach ( $hidden_fields as $value ) {
 			$output .= self::hidden_input( 'form_' . str_replace( ' ', '-', $value ), $named_parameters[$value] );
