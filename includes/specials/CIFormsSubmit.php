@@ -639,24 +639,26 @@ class CIFormsSubmit extends SpecialPage {
 				case 'inputs responsive':
 
 					foreach ( $section['items'] as $value ) {
-
 						$output .= '<div class="ci_form_section_inputs_row">';
-						$output .= '<div class="ci_form_section_inputs_col' .
-							( $section['type'] == 'inputs responsive' ? '-25' : '' ) . '">';
+
+						if ( $section['type'] == 'inputs responsive' ) {
+							preg_match( "/^\s*([^\[\]]+)\s*(.+)\s*$/", $value['label'], $match );
+							$value['label'] = $match[2];
+							$output .= '<div class="ci_form_section_inputs_col-25">';
+							$output .= $match[1];
+							$output .= '</div><div class="ci_form_section_inputs_col-75">';
+						}
 
 						preg_match_all( '/([^\[\]]*)\[\s*([^\[\]]*)\s*\]\s*(\*)?/', $value['label'], $match_all );
 						$inputs_per_row = count( $match_all[0] );
+						$label_exists = !empty( implode( '', $match_all[1] ) );
 
 						$i = 0;
 						$output .= preg_replace_callback( '/([^\[\]]*)\[\s*([^\[\]]*)\s*\]\s*(\*)?/',
-							static function ( $matches ) use ( $section, $value, &$i, $inputs_per_row ) {
+							static function ( $matches ) use ( $section, $value, &$i, $inputs_per_row, $label_exists ) {
 								$replacement = '';
 
-								if ( $inputs_per_row > 1 ) {
-									$replacement .= '<div class="ci_form_section_inputs_inner_col" style="float:left;width:' . ( 100 / $inputs_per_row ) . '%">';
-								}
-
-								$label = trim( $matches[1] );
+								$replacement .= '<div class="ci_form_section_inputs_inner_col" style="float:left;width:' . ( 100 / $inputs_per_row ) . '%">';
 
 								list( $input_type, $placeholder, $input_options ) =
 									CIForms::ci_form_parse_input_symbol( $matches[2] ) + [ null, null, null ];
@@ -669,30 +671,31 @@ class CIFormsSubmit extends SpecialPage {
 									$placeholder .= ' *';
 								}
 
-								if ( !empty( $label ) ) {
-									$replacement .= '<label>' . $label .
-										( $required && empty( $placeholder ) ? ' *' : '' ) . '</label>';
-								}
+								if ( $section['type'] != 'inputs responsive' ) {
+									$label = trim( $matches[1] );
+									if ( !empty( $label ) ) {
+										$replacement .= '<label>' . $label .
+											( $required && empty( $placeholder ) ? ' *' : '' ) . '</label>';
 
-								if ( $section['type'] == 'inputs responsive' && $i == 0 ) {
-									$replacement .= '</div>';
-									$replacement .= '<div class="ci_form_section_inputs_col-75">';
+									} elseif ( $label_exists ) {
+										// Zero-width space
+										$replacement .= '<label>&#8203;</label>';
+									}
 								}
 
 								$replacement .= '<span class="input">' .
 									htmlspecialchars( $value['inputs'][$i] ) . '</span>';
 
-								if ( $inputs_per_row > 1 ) {
-									$replacement .= '</div>';
-								}
+								$replacement .= '</div>';
 
 								$i++;
 								return $replacement;
 							}, $value['label'] ); // preg_replace_callback
 
+						if ( $section['type'] == 'inputs responsive' ) {
+							$output .= '</div>';
+						}
 						$output .= '</div>';
-						$output .= '</div>';
-
 					}
 
 					break;

@@ -380,15 +380,18 @@ class CIFormsManage extends QueryPage {
 			$n++;
 			$row = (array)$row;
 
+			array_walk( $this->headers, static function ( &$value, $key ) use( $row ) {
+				$value = ( array_key_exists( $key, $row ) ? $row[$key] : "" );
+			} );
+
 			// php < 7.4
 			$csv_line = [ $n, $row['username'] ];
-			$csv_line = array_merge( $csv_line, array_values( array_intersect_key( $row, $this->headers ) ) );
+			$csv_line = array_merge( $csv_line, array_values( $this->headers ) );
 			$csv_line[] = $row['created_at'];
 			fputcsv( $output, $csv_line );
 
 			// php 7.4
-			// fputcsv( $output, [ $n, $row['username'], ...array_values( array_intersect_key( $row, $this->headers ) ),  $row['created_at'] ] );
-
+			// fputcsv( $output, [ $n, $row['username'], ...array_values( $row, $this->headers ),  $row['created_at'] ] );
 		}
 
 		$submission_date = htmlspecialchars(
@@ -848,8 +851,6 @@ AND title = ' . $dbr->addQuotes( $this->form_title )
 	private function parseFormData( $data, $html = true ) {
 		$array = [];
 		$output = [];
-		$a = 0;
-		$b = 0;
 
 		foreach ( $data['sections'] as $section ) {
 
@@ -863,19 +864,31 @@ AND title = ' . $dbr->addQuotes( $this->form_title )
 				case 'inputs':
 				case 'inputs responsive':
 					foreach ( $section['items'] as $value ) {
+
+						$main_label = "";
+						if ( $section['type'] == 'inputs responsive' ) {
+							preg_match( "/^\s*([^\[\]]+)\s*(.+)\s*$/", $value['label'], $match );
+							$main_label = $match[1];	// currently not used
+							$value['label'] = $match[2];
+						}
+
 						$i = 0;
+
 						// alternatively use preg_split
 						// @phan-suppress-next-line PhanPluginUseReturnValueInternalKnown
 						preg_replace_callback(
 							'/([^\[\]]*)\[([^\[\]]*)\]\s*(\*)?/',
-							static function ( $matches ) use ( &$i, $value, &$array, $html ) {
-								$label = $matches[1];
-								// use input type as label if label is missing
-								if ( empty( $label ) ) {
-									list( $input_type, $placeholder, $input_options ) = CIForms::ci_form_parse_input_symbol( $matches[2] ) + [ null, null, null ];
-									$label = ( $placeholder ?: ( $html ? '<em>' . $input_type . '</em>' : $input_type ) );
+							static function ( $matches ) use ( &$i, $value, &$array, $html, $main_label, $section ) {
+								$label = $matches[1];	// currently not used
+
+								list( $input_type, $placeholder, $input_options ) = CIForms::ci_form_parse_input_symbol( $matches[2] ) + [ null, null, null ];
+
+								// @phan-suppress-next-line PhanSuspiciousValueComparison
+								if ( $input_type === 'text' ) {
+									$input_type = 'text input';
 								}
-								$array[] = [ trim( $label ), $value['inputs'][$i] ];
+
+								$array[] = [ $input_type, ( $value['inputs'] ? $value['inputs'][$i] : "" ) ];
 								$i++;
 							},
 							$value['label']
@@ -883,7 +896,6 @@ AND title = ' . $dbr->addQuotes( $this->form_title )
 					}
 					break;
 				case 'multiple choice':
-					$a++;
 					$value_ = [];
 
 					foreach ( $section['items'] as $key => $value ) {
@@ -891,10 +903,9 @@ AND title = ' . $dbr->addQuotes( $this->form_title )
 							$value_[] = ( $key + 1 ) . ( !empty( $value['inputs'] ) ? ' (' . implode( ' &ndash; ', $value['inputs'] ) . ')' : '' );
 						}
 					}
-					$array[] = [ 'multiple choice #' . $a, implode( ( $html ? '<br />' : "\n" ), $value_ ) ];
+					$array[] = [ 'multiple choice', implode( ( $html ? '<br />' : "\n" ), $value_ ) ];
 					break;
 				case 'cloze test':
-					$b++;
 					$value_ = [];
 					foreach ( $section['items'] as $key => $value ) {
 
@@ -914,11 +925,11 @@ AND title = ' . $dbr->addQuotes( $this->form_title )
 					$list_type_ordered = in_array( $section['list-style'], CIForms::$ordered_styles );
 
 					if ( $html ) {
-						$array[] = [ 'cloze test #' . $b, '<' . ( !$list_type_ordered ? 'ul' : 'ol' ) . ' style="list-style:' . $section['list-style'] . '">' . implode( $value_ ) . '</' . ( !$list_type_ordered ? 'ul' : 'ol' ) . '>' ];
+						$array[] = [ ( !empty( $section['title'] ) ? $section['title'] : 'cloze test' ), '<' . ( !$list_type_ordered ? 'ul' : 'ol' ) . ' style="list-style:' . $section['list-style'] . '">' . implode( $value_ ) . '</' . ( !$list_type_ordered ? 'ul' : 'ol' ) . '>' ];
 
 					} else {
 						$i = 0;
-						$array[] = [ 'cloze test #' . $b, implode( "\n", !$list_type_ordered ? $value_ : array_map( static function ( $value ) use ( &$i ) {
+						$array[] = [ 'cloze test', implode( "\n", !$list_type_ordered ? $value_ : array_map( static function ( $value ) use ( &$i ) {
 							return ( ++$i ) . ". " . $value;
 						}, $value_ ) ) ];
 					}
@@ -927,8 +938,24 @@ AND title = ' . $dbr->addQuotes( $this->form_title )
 			}
 		}
 
+		// handle duplicated keys
+		$increment = [];
+		foreach ( $array as $key => $value ) {
+			if ( !array_key_exists( $value[0], $increment ) ) {
+				$increment[ $value[0] ] = 0;
+			} else {
+				$increment[ $value[0] ]++;
+			}
+		}
+
+		$increment = array_filter( $increment );
+
+		array_walk( $increment, static function ( &$value ) {
+			$value = 0;
+		} );
+
 		foreach ( $array as $value ) {
-			$output[ $value[0] ] = ( $html ? addslashes( $value[1] ) : $value[1] );
+			$output[ $value[0] . ( array_key_exists( $value[0], $increment ) ? '#' . ++$increment[ $value[0] ] : '' )  ] = ( $html ? addslashes( $value[1] ) : $value[1] );
 		}
 
 		return $output;
