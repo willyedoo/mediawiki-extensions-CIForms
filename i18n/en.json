@@ -25,7 +25,7 @@
 	"ci-forms-recaptcha-challenge-not-found": "Captcha challenge not found.",
 	"ci-forms-recaptcha-error": "Recaptcha error ($1).",
 	"ci-forms-recaptcha-negative-score": "Negative score.",
-	"ci-forms-try-again-message": "Please try again or contact <span class=\"ci_text_highlight\">$2</span> to receive support",
+	"ci-forms-try-again-message": "Please try again or contact <span class=\"ci_text_highlight\">$1</span> to receive support",
 	"ciformsmanage": "Submissions",
 	"specialpages-group-ciforms": "CI Forms",
 	"ci-forms-manage-no-rows": "No submissions",

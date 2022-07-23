@@ -183,6 +183,10 @@ class CIForms {
 		}
 		$output = '';
 		$url = Title::newFromText( 'Special:CIFormsSubmit' )->getLocalURL();
+
+		// https://www.accessibility-developer-guide.com/examples/forms/required/
+		$output .= '<svg style="display:none" id="definition" version="1.1" xmlns="http://www.w3.org/2000/svg"><defs><symbol id="required" viewbox="0 0 128 128"><g><path d="M110.1,16.4L75.8,56.8l0.3,1l50.6-10.2v32.2l-50.9-8.9l-0.3,1l34.7,39.1l-28.3,16.5L63.7,78.2L63,78.5   l-18.5,49L17.2,111l34.1-39.8v-0.6l-50,9.2V47.6l49.3,9.9l0.3-0.6L17.2,16.7L45.5,0.5l17.8,48.7H64L82.1,0.5L110.1,16.4z"></path></g></symbol></defs></svg>';
+
 		$output .= '<form class="ci_form' . ( !empty( $named_parameters['css class'] ) ? " " .
 				htmlspecialchars( $named_parameters['css class'] ) : '' ) . '" action="' . $url .
 			'" method="post">';
@@ -464,26 +468,36 @@ class CIForms {
 							$replacement = '';
 							$replacement .= '<div class="ci_form_section_inputs_inner_col" style="float:left;width:' . ( 100 / $inputs_per_row ) . '%">';
 							list( $input_type, $placeholder, $input_options ) =
-								self::ci_form_parse_input_symbol( $matches[2] ) + [ null, null, null ];
+								self::ci_form_parse_input_symbol( $matches[2] ) + [ null, "", null ];
 							$required =
 								( !empty( $matches[3] ) ? ' data-required="1"' : '' );
 
+							$label = null;
 							if ( $named_parameters['type'] != 'inputs responsive' ) {
 								$label = trim( $matches[1] );
 								if ( !empty( $label ) ) {
-									$replacement .= '<label>' . $label . '</label>';
+									$replacement .= '<label>' . $label . ( $required ? '<span class="ci_form_required_symbol" aria-hidden="true">&nbsp;*</span>' : '' ) . '</label>';
 								} elseif ( $label_exists ) {
 									// Zero-width space
 									$replacement .= '<label>&#8203;</label>';
 								}
 							}
+
+							if ( $named_parameters['type'] != 'inputs responsive' || $inputs_per_row > 1 ) {
+								if ( empty( $label ) && $required ) {
+									// @phan-suppress-next-line PhanRedundantCondition
+									$placeholder .= ( !empty( $placeholder ) ? ' ' : '' ) . '*';
+								}
+							}
+
+							$replacement .= '<div class="ci_form_section_inputs_inner_col_input_container" style="width:' . ( $named_parameters['type'] == 'inputs' || $inputs_per_row > 1 ? '100%' : 'auto' ) . '">';
 							switch ( $input_type ) {
 								case 'textarea':
 									// '_value' is appended for easy validation
 									$replacement .= '<textarea rows="4" name="' . $unique_id .
 										'_items_' . $n . '_input_' . $i . '_value"' .
 										( $input_options && is_numeric( $input_options ) ? ' maxlength="' . $input_options . '"' : '' ) .
-										( $placeholder ? ' placeholder="' .
+										( !empty( $placeholder ) ? ' placeholder="' .
 											htmlspecialchars( $placeholder ) . '"' : '' ) .
 										$required . '></textarea>' .
 										( $input_options && is_numeric( $input_options ) ? '<span class="ci_form_section_inputs_textarea_maxlength">0/' . $input_options . ' characters</span>' : '' );
@@ -498,10 +512,8 @@ class CIForms {
 									$select_options = preg_split( "/\s*,\s*/", $select_options );
 									$replacement .= '<select name="' . $unique_id . '_items_' . $n .
 										'_input_' . $i . '_value" type="' . $input_type . '"' .
-										( $placeholder ? ' placeholder="' .
-											htmlspecialchars( $placeholder ) . '"' : '' ) .
 										$required . '>';
-									if ( $placeholder ) {
+									if ( !empty( $placeholder ) ) {
 										$replacement .= '<option value="" disabled selected>' . $placeholder . '</option>';
 									}
 									$replacement .= implode( array_map(
@@ -531,11 +543,11 @@ class CIForms {
 										$required . '/>';
 									break;
 							}
+							// if ( $required && !$label && !$required_in_placeholder && ( $named_parameters['type'] != 'inputs responsive' || $inputs_per_row > 1 ) ) {
+							// 	$replacement .= '<span class="ci_form_required_icon" aria-hidden="true"><svg class="icon" focusable="false"><use xlink:href="#required"></use></svg></span>';
+							// }
 
-							if ( $required && ( $named_parameters['type'] != 'inputs responsive' || $inputs_per_row > 1 ) ) {
-								$replacement .= '<span class="ci_form_required_symbol" aria-hidden="true">&nbsp;*</span>';
-							}
-
+							$replacement .= '</div>';
 							$replacement .= '</div>';
 							$i++;
 							return $replacement;
@@ -682,7 +694,7 @@ class CIForms {
 	 */
 	public static function ci_form_parse_input_symbol( $value ) {
 		if ( empty( $value ) ) {
-			return [ 'text', null, null ];
+			return [ 'text', "", null ];
 		}
 		$input_types = [
 				'text',
@@ -707,7 +719,7 @@ class CIForms {
 		// [textarea=500]
 		// [enter=textarea=500]
 		// [enter text=textarea=500]
-		list( $a, $b, $c ) = preg_split( "/\s*=\s*/", $value ) + [ null, null, null ];
+		list( $a, $b, $c ) = preg_split( "/\s*=\s*/", $value ) + [ "", null, null ];
 		if ( $b && $c ) {
 			return [ $b, $a, $c ];
 		}
@@ -715,7 +727,7 @@ class CIForms {
 			return [ $b, $a, null ];
 		}
 		if ( in_array( $a, $input_types ) ) {
-			return [ $a, null, $b ];
+			return [ $a, "", $b ];
 		}
 		if ( !$b ) {
 			$b = 'text';

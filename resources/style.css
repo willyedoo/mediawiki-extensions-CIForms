@@ -80,6 +80,11 @@
 	content: '\00A0';
 }
 
+.ci_form_section_inputs_inner_col_input_container {
+	position: relative;
+	display: inline-block;
+}
+
 .ci_form_section_inputs_row input,
 .ci_form_section_inputs_row select,
 .ci_form_section_inputs_row textarea,
@@ -90,7 +95,7 @@
 	border: 1px solid #ccc;
 	display: inline-block;
 	border-radius: 6px;
-	width: calc( 100% - 2em );
+	width: 100%;
 	box-sizing: border-box;
 	resize: vertical;
 }
@@ -101,7 +106,12 @@
 .ci_form_section.inputs_responsive .ci_form_section_inputs_row .input {
 	border-radius: 2px;
 	padding: 4px;
-	width: auto;
+	width: 100%;
+	background: #fff;
+	border: 1px solid #ccc;
+	display: inline-block;
+	box-sizing: border-box;
+	resize: vertical;
 }
 
 .ci_form_section.inputs_responsive .ci_form_section_inputs_row {
@@ -294,6 +304,19 @@ ol.ci_form_section_cloze_test_list li.ci_form_section_cloze_test_list_question_e
 }
 
 .ci_form_required_symbol {
-	vertical-align: top;
 	font-size: larger;
+	vertical-align: top;
+}
+
+.ci_form_required_icon {
+	position: absolute;
+	right: 0;
+	margin: auto;
+	margin-right: 0;
+}
+
+.ci_form_required_icon svg {
+	width: 0.5em;
+	height: 0.5em;
+	fill: #363535;
 }
