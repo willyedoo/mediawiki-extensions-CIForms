@@ -243,6 +243,14 @@ $( document ).ready( function () {
 			)
 			.removeAttr( 'required' );
 
+		$( form_el )
+			.find(
+				'.ci_form_section_display_' +
+					currentSection[ index ] +
+					' select[data-required="1"]'
+			)
+			.removeAttr( 'required' );
+
 		currentSection[ index ] = current_section;
 		$( form_el )
 			.find( '.ci_form_section_display_' + current_section )
