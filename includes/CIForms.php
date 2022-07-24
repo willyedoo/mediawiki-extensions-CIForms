@@ -188,7 +188,7 @@ class CIForms {
 		$output .= '<svg style="display:none" id="definition" version="1.1" xmlns="http://www.w3.org/2000/svg"><defs><symbol id="required" viewbox="0 0 128 128"><g><path d="M110.1,16.4L75.8,56.8l0.3,1l50.6-10.2v32.2l-50.9-8.9l-0.3,1l34.7,39.1l-28.3,16.5L63.7,78.2L63,78.5   l-18.5,49L17.2,111l34.1-39.8v-0.6l-50,9.2V47.6l49.3,9.9l0.3-0.6L17.2,16.7L45.5,0.5l17.8,48.7H64L82.1,0.5L110.1,16.4z"></path></g></symbol></defs></svg>';
 
 		$output .= '<form class="ci_form' . ( !empty( $named_parameters['css class'] ) ? " " .
-				htmlspecialchars( $named_parameters['css class'] ) : '' ) . '" action="' . $url .
+				htmlspecialchars( str_replace( [ '"', "'" ], '', $named_parameters['css class'] ) ) : '' ) . '" action="' . $url .
 			'" method="post">';
 		$output .= '<div class="ci_form_container">';
 		// allow wiki-text and html in titles
@@ -223,6 +223,10 @@ class CIForms {
 					$split = array_fill( 0, count( $subsections ), 1 );
 				} else {
 					$split = preg_split( "/\s*,\s*/", $named_parameters['paging'] );
+
+					if ( count( $split ) == 1 ) {
+						$split = array_fill( 0, ceil( count( $subsections ) / (int)$split[0] ), (int)$split[0] );
+					}
 				}
 				$n = 0;
 				foreach ( $split as $i => $value ) {
@@ -373,7 +377,8 @@ class CIForms {
 			// 'unordered', 'letters', 'numbers' + standard values
 			'max answers' => 1,
 			'min answers' => null,	// number or percent, for multiple choice questions if max answers > 1, default 1/2 +1
-			'suggestions' => null
+			'suggestions' => null,
+			'css class' => '',
 			// if multiple choice
 		];
 		$set_named_parameters = [];
@@ -392,9 +397,10 @@ class CIForms {
 			$named_parameters['list type'] = 'ordered';
 		}
 		$unique_id = uniqid();
-		$output .= '<div class="ci_form_section ' .
-			htmlspecialchars( str_replace( ' ', '_', $named_parameters['type'] ) ) . '" data-id="' .
-			$unique_id . '">';
+		$output .= '<div class="ci_form_section ' . htmlspecialchars( str_replace( ' ', '_', $named_parameters['type'] ) ) .
+			( !empty( $named_parameters['css class'] ) ? " " . htmlspecialchars( str_replace( [ '"', "'" ], '', $named_parameters['css class'] ) ) : '' ) .
+			'" data-id="' .	$unique_id . '">';
+
 		switch ( $named_parameters['type'] ) {
 			case 'cloze test':
 			case 'multiple choice':
@@ -447,9 +453,13 @@ class CIForms {
 					$output .= self::hidden_input( $unique_id . '_items_' . $n . '_label', $value );
 					if ( $named_parameters['type'] == 'inputs responsive' ) {
 						preg_match( "/^\s*([^\[\]]+)\s*(.+)\s*$/", $value, $match );
-						$value = $match[2];
-						$output .= '<div class="ci_form_section_inputs_col-25">';
-						$output .= trim( $match[1] );
+						if ( $match ) {
+							$value = $match[2];
+							$output .= '<div class="ci_form_section_inputs_col-25">';
+							$output .= trim( $match[1] );
+						} else {
+							$output .= '<div class="ci_form_section_inputs_col">';
+						}
 					}
 					preg_match_all( '/([^\[\]]*)\[\s*([^\[\]]*)\s*\]\s*(\*)?/', $value, $match_all );
 
