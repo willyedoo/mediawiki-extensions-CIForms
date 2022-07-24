@@ -304,7 +304,7 @@ ol.ci_form_section_cloze_test_list li.ci_form_section_cloze_test_list_question_e
 }
 
 .ci_form_required_symbol {
-	font-size: larger;
+	/* font-size: larger; */
 	vertical-align: top;
 }
 

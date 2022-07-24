@@ -218,6 +218,8 @@ $( document ).ready( function () {
 			return;
 		}
 
+		form_el.get( 0 ).scrollIntoView();
+
 		var index = form_el.data( 'form-index' );
 		var current_section = currentSection[ index ] + ( next ? 1 : -1 );
 
@@ -272,6 +274,8 @@ $( document ).ready( function () {
 
 	$( '.ci_form' ).submit( function ( evt ) {
 		var form_el = $( this );
+
+		form_el.get( 0 ).scrollIntoView();
 
 		var paging = $( this )
 			.find( 'input[type=hidden][name=form_paging]' )
