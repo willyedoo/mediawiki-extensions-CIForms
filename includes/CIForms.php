@@ -222,7 +222,7 @@ class CIForms {
 				if ( $named_parameters['paging'] === 'true' ) {
 					$split = array_fill( 0, count( $subsections ), 1 );
 				} else {
-					$split = preg_split( "/\s*,\s*/", $named_parameters['paging'] );
+					$split = preg_split( "/\s*,\s*/", $named_parameters['paging'], -1, PREG_SPLIT_NO_EMPTY );
 
 					if ( count( $split ) == 1 ) {
 						$split = array_fill( 0, ceil( count( $subsections ) / (int)$split[0] ), (int)$split[0] );
@@ -519,7 +519,7 @@ class CIForms {
 									// can be escaped
 									$id_tmp = uniqid();
 									$select_options = str_replace( '\\,', $id_tmp, $input_options );
-									$select_options = preg_split( "/\s*,\s*/", $select_options );
+									$select_options = preg_split( "/\s*,\s*/", $select_options, -1, PREG_SPLIT_NO_EMPTY );
 									$replacement .= '<select name="' . $unique_id . '_items_' . $n .
 										'_input_' . $i . '_value" type="' . $input_type . '"' .
 										$required . '>';
@@ -537,7 +537,7 @@ class CIForms {
 											if ( strpos( $val, ':' ) === false ) {
 												return '<option>' . $val . '</option>';
 											}
-											list( $value, $label ) = preg_split( "/\s*:\s*/", $val );
+											list( $value, $label ) = preg_split( "/\s*:\s*/", $val, -1, PREG_SPLIT_NO_EMPTY );
 											return '<option value="' . htmlspecialchars( $value ) . '">' . $label . '</option>';
 										}, $select_options ) );
 									$replacement .= '</select>';
@@ -607,7 +607,7 @@ class CIForms {
 			case 'cloze test':
 				$suggestions = [];
 				if ( !empty( $named_parameters['suggestions'] ) ) {
-					$suggestions = preg_split( "/\s*,\s*/", $named_parameters['suggestions'] );
+					$suggestions = preg_split( "/\s*,\s*/", $named_parameters['suggestions'], -1, PREG_SPLIT_NO_EMPTY );
 				}
 				$items = [];
 				$answers = [];
@@ -631,7 +631,7 @@ class CIForms {
 								// suggestions: "to be, to do, to make"
 								// example answer in past perfect
 								// I [to be=was] proud to win ...
-								list( $a, $b ) = preg_split( "/\s*=\s*/", $matches[1][$i] ) + [ null, null ];
+								list( $a, $b ) = preg_split( "/\s*=\s*/", $matches[1][$i], -1, PREG_SPLIT_NO_EMPTY ) + [ null, null ];
 							}
 							$found_suggestion = preg_grep( '/^' . preg_quote( $a ) . '$/i', $suggestions );
 							if ( count( $found_suggestion ) ) {
@@ -729,7 +729,7 @@ class CIForms {
 		// [textarea=500]
 		// [enter=textarea=500]
 		// [enter text=textarea=500]
-		list( $a, $b, $c ) = preg_split( "/\s*=\s*/", $value ) + [ "", null, null ];
+		list( $a, $b, $c ) = preg_split( "/\s*=\s*/", $value, -1, PREG_SPLIT_NO_EMPTY ) + [ "", null, null ];
 		if ( $b && $c ) {
 			return [ $b, $a, $c ];
 		}

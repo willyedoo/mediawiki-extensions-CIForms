@@ -227,7 +227,7 @@ class CIFormsSubmit extends SpecialPage {
 		$keys = array_keys( $types );
 		$key = array_search( $name, $map );
 		$globalName = $keys[$key];
-		$globalMode = ( !empty( $GLOBALS[$globalName . 'GlobalMode'] ) ? $GLOBALS[$globalName . 'GlobalMode'] : CIFORMS_VALUE_IF_NULL );
+		$globalMode = ( array_key_exists( $globalName . 'GlobalMode', $GLOBALS ) ? $GLOBALS[$globalName . 'GlobalMode'] : CIFORMS_VALUE_IF_NULL );
 		$local = $form_result[$name];
 		// avoid "SecurityCheck-XSS Calling method \CIFormsSubmit::exit() in \CIFormsSubmit::execute that outputs using tainted argument #2."
 		$global = ( !empty( $GLOBALS[$globalName] ) ? htmlspecialchars( $GLOBALS[$globalName] ) : "" );
@@ -235,14 +235,14 @@ class CIFormsSubmit extends SpecialPage {
 		if ( $globalMode !== CIFORMS_VALUE_IF_NULL || empty( $local ) ) {
 			$output = $global;
 			if ( $types[$globalName] == 'array' && !is_array( $global ) ) {
-				$output = preg_split( "/\s*,\s*/", $output );
+				$output = preg_split( "/\s*,\s*/", $output, -1, PREG_SPLIT_NO_EMPTY );
 			}
 		}
 		if ( $globalMode === CIFORMS_VALUE_OVERRIDE ) {
 			return $output;
 		}
 		if ( $types[$globalName] == 'array' ) {
-			$local = preg_split( "/\s*,\s*/", $local );
+			$local = preg_split( "/\s*,\s*/", $local, -1, PREG_SPLIT_NO_EMPTY );
 		}
 		if ( empty( $local ) && $globalMode === CIFORMS_VALUE_IF_NULL ) {
 			return $output;
