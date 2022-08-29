@@ -557,6 +557,9 @@ class CIFormsSubmit extends SpecialPage {
 									if ( !empty( $label ) ) {
 										$replacement .= '<label>' . $label .
 											( $required && empty( $placeholder ) ? ' *' : '' ) . '</label>';
+									// @see https://www.mediawiki.org/wiki/Topic:X0ywugj89ow4bzbm
+									} elseif ( !empty( $placeholder ) ) {
+										$replacement .= '<label>' . $placeholder . '</label>';
 									} elseif ( $label_exists ) {
 										// Zero-width space
 										$replacement .= '<label>&#8203;</label>';

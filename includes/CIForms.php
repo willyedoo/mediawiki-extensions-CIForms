@@ -150,6 +150,7 @@ class CIForms {
 	 */
 	public static function ci_form( Parser $parser, ...$argv ) {
 		self::$loadModule = true;
+		$title = $parser->getTitle();
 		$named_parameters = [
 			'submit' => null,	// legacy
 			'email to' => null,
@@ -194,17 +195,17 @@ class CIForms {
 		// allow wiki-text and html in titles
 		if ( !empty( $named_parameters['title'] ) ) {
 			$named_parameters['title'] =
-				self::replace_wikitext_and_html( $named_parameters['title'] );
+				self::replace_wikitext_and_html( $title, $named_parameters['title'] );
 		}
 		if ( !empty( $named_parameters['title'] ) ) {
 			$output .= '<div class="ci_form_title">';
-			$output .= self::replace_wikitext_and_html( $named_parameters['title'] );
+			$output .= self::replace_wikitext_and_html( $title, $named_parameters['title'] );
 			$output .= '</div>';
 		}
 		$output .= '<div class="ci_form_sections_container' .
 			( count( $subsections ) ? ' multiple_sections' : '' ) . '">';
 		if ( count( $body ) ) {
-			$output .= self::ci_form_section_process( $body );
+			$output .= self::ci_form_section_process( $title, $body );
 		}
 		if ( count( $subsections ) ) {
 			if ( !empty( $named_parameters['paging'] ) && $named_parameters['paging'] !== 'false' ) {
@@ -246,7 +247,6 @@ class CIForms {
 		if ( self::isCaptchaEnabled() ) {
 			$output .= '<input type="hidden" name="g-recaptcha-response">';
 		}
-		$title = $parser->getTitle();
 		$output .= self::hidden_input( 'form_pagename', $title->getText() );
 		$output .= self::hidden_input( 'form_pageid', $title->getArticleID() );
 		if ( empty( $named_parameters['paging'] ) || $named_parameters['paging'] === 'false' ) {
@@ -330,12 +330,18 @@ class CIForms {
 	}
 
 	/**
+	 * @param Title $title
 	 * @param string $value
 	 * @return array|string|string[]|null
 	 */
-	protected static function replace_wikitext_and_html( $value ) {
+	protected static function replace_wikitext_and_html( $title, $value ) {
 		$context = new RequestContext();
-		$out_ = new OutputPage( $context );
+
+		// see below, parseAsContent requires a title
+		// which is not set when executed offline
+		$context->setTitle( $title );
+		$out_ = $context->getOutput();
+
 		$unique_id = uniqid();
 		$replacements = [];
 		$value =
@@ -363,10 +369,11 @@ class CIForms {
 	}
 
 	/**
+	 * @param Title $title
 	 * @param array|string[] $argv
 	 * @return string
 	 */
-	protected static function ci_form_section_process( $argv ) {
+	protected static function ci_form_section_process( $title, $argv ) {
 		$output = '';
 		// default values
 		$named_parameters = [
@@ -437,7 +444,7 @@ class CIForms {
 		// allow wiki-text and html in titles
 		if ( !empty( $named_parameters['title'] ) ) {
 			$named_parameters['title'] =
-				self::replace_wikitext_and_html( $named_parameters['title'] );
+				self::replace_wikitext_and_html( $title, $named_parameters['title'] );
 		}
 		$output .= self::hidden_input( $unique_id . '_section_type', $named_parameters['type'] );
 		$output .= self::hidden_input( $unique_id . '_section_title', $named_parameters['title'] );
@@ -751,7 +758,7 @@ class CIForms {
 	 * @return array
 	 */
 	public static function ci_form_section( Parser $parser, ...$argv ) {
-		$output = self::ci_form_section_process( $argv );
+		$output = self::ci_form_section_process( $parser->getTitle(), $argv );
 		// @phan-suppress-next-line SecurityCheck-XSS
 		return [ $output, 'noparse' => true, 'isHTML' => true ];
 	}

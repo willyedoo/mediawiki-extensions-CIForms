@@ -114,6 +114,13 @@
 	resize: vertical;
 }
 
+.ci_form.pdf .ci_form_section_inputs_row input,
+.ci_form.pdf .ci_form_section_inputs_row select,
+.ci_form.pdf .ci_form_section_inputs_row textarea,
+.ci_form.pdf .ci_form_section_inputs_row .input {
+	display: block;
+}
+
 .ci_form_section.inputs_responsive .ci_form_section_inputs_row {
 	margin-bottom: 2px;
 }
