@@ -21,8 +21,6 @@
  * @copyright Copyright © 2021-2022, https://wikisphere.org
  */
 class CIForms {
-	/** @var bool */
-	protected static $loadModule = false;
 	/** @var array */
 	public static $ordered_styles = [
 		'decimal',
@@ -73,10 +71,15 @@ class CIForms {
 			'ci-forms-validation-msg2' => wfMessage( 'ci-forms-validation-msg2' )->text(),
 			'ci-forms-validation-msg3' => wfMessage( 'ci-forms-validation-msg3' )->text(),
 		] );
+
 		$title = $outputPage->getTitle();
 		$categories = $title->getParentCategories();
-		// if( self::$loadModule ) {
-		if ( array_key_exists( 'Category:Pages_with_forms', $categories ) ) {
+		$indicators = $outputPage->getIndicators();
+
+		if ( !empty( $indicators['ciform'] )
+			// back-compatibility
+			|| array_key_exists( 'Category:Pages_with_forms', $categories ) ) {
+
 			global $wgCIFormsGoogleRecaptchaSiteKey;
 			global $wgResourceBasePath;
 			$outputPage->addModules( 'ext.CIForms.validation' );
@@ -149,8 +152,9 @@ class CIForms {
 	 * @return array
 	 */
 	public static function ci_form( Parser $parser, ...$argv ) {
-		self::$loadModule = true;
+		$parser->getOutput()->setIndicator( 'ciform', '1' );
 		$title = $parser->getTitle();
+
 		$named_parameters = [
 			'submit' => null,	// legacy
 			'email to' => null,
