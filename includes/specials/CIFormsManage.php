@@ -108,9 +108,10 @@ class CIFormsManage extends QueryPage {
 		}
 
 		if ( !empty( $this->form_title ) ) {
+			$special = SpecialPage::getTitleFor( 'CIFormsManage' );
 			$out->addWikiMsg(
 				'ci-forms-manage-pager-return',
-				Title::newFromText( 'Special:CIFormsManage' )->getFullText()
+				$special->getFullText()
 			);
 		}
 
@@ -777,7 +778,7 @@ AND title = ' . $dbr->addQuotes( $this->form_title )
 						}
 						break;
 					case 'action':
-						$url = Title::newFromText( 'Special:CIFormsManage' )->getLocalURL();
+						$url = SpecialPage::getTitleFor( 'CIFormsManage' )->getLocalURL();
 						$formatted = new OOUI\ButtonWidget(
 							[
 								'href' => wfAppendQuery( $url, 'form_title=' . urlencode( $result['title'] ) . '&page_id=' . $result['page_id'] ),
@@ -814,7 +815,7 @@ AND title = ' . $dbr->addQuotes( $this->form_title )
 						);
 						break;
 					case 'pdf':
-						$url = Title::newFromText( 'Special:CIFormsManage' )->getLocalURL();
+						$url = SpecialPage::getTitleFor( 'CIFormsManage' )->getLocalURL();
 						$formatted = new OOUI\ButtonWidget(
 							[
 								'href' => wfAppendQuery( $url, 'download=' . $result['id'] ),

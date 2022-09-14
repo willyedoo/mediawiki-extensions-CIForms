@@ -148,6 +148,9 @@ class CIFormsSubmit extends SpecialPage {
 			'created_at' => date( 'Y-m-d H:i:s' )
 		];
 		$dbr = wfGetDB( DB_MASTER );
+		if ( !$dbr->tableExists( 'CIForms_submissions' ) ) {
+			return false;
+		}
 		$row_inserted = $dbr->insert(
 			$this->sqlReplace( 'CIForms_submissions' ),
 			$update_obj
@@ -171,6 +174,11 @@ class CIFormsSubmit extends SpecialPage {
 			// a sysop can access all data, so we don't save usergroups related
 			// to the submissions
 			if ( !empty( $groups ) ) {
+
+				if ( !$dbr->tableExists( 'CIForms_submissions_groups' ) ) {
+					return false;
+				}
+
 				$latest_id = $dbr->selectField(
 					$this->sqlReplace( 'CIForms_submissions' ),
 					'id',

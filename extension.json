@@ -30,8 +30,8 @@
 		"BeforePageDisplay": "CIForms::onBeforePageDisplay"
 	},
 	"ResourceFileModulePaths": {
-		"localBasePath": "",
-		"remoteExtPath": "CIForms"
+		"localBasePath": "resources",
+		"remoteExtPath": "CIForms/resources"
 	},
 	"SpecialPages": {
 		"CIFormsSubmit": "CIFormsSubmit",
@@ -39,7 +39,6 @@
 	},
 	"ResourceModules": {
 		"ext.CIForms.validation": {
-			"localBasePath": "resources",
 			"scripts": [
 				"validation.js"
 			],
@@ -56,7 +55,6 @@
 			]
 		},
 		"ext.CIForms.select2": {
-			"localBasePath": "resources",
 			"scripts": [
 				"select2/select2.full.js"
 			],
