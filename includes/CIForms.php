@@ -63,9 +63,10 @@ class CIForms {
 
 	/**
 	 * @param OutputPage $outputPage
-	 * @param Skin $skin
+	 * @param ParserOutput $parserOutput
 	 */
-	public static function onBeforePageDisplay( OutputPage $outputPage, Skin $skin ) {
+	public static function onOutputPageParserOutput( OutputPage $outputPage, ParserOutput $parserOutput ) {
+		// @todo, use "messages" in extension.json and mw.msg() client side
 		$outputPage->addJsConfigVars( [
 			'ci-forms-validation-msg1' => wfMessage( 'ci-forms-validation-msg1' )->text(),
 			'ci-forms-validation-msg2' => wfMessage( 'ci-forms-validation-msg2' )->text(),
@@ -74,9 +75,8 @@ class CIForms {
 
 		$title = $outputPage->getTitle();
 		$categories = $title->getParentCategories();
-		$indicators = $outputPage->getIndicators();
 
-		if ( !empty( $indicators['ciform'] )
+		if ( $parserOutput->getFlag( 'ciform' )
 			// back-compatibility
 			|| array_key_exists( 'Category:Pages_with_forms', $categories ) ) {
 
@@ -152,7 +152,7 @@ class CIForms {
 	 * @return array
 	 */
 	public static function ci_form( Parser $parser, ...$argv ) {
-		$parser->getOutput()->setIndicator( 'ciform', '1' );
+		$parser->getOutput()->setFlag( 'ciform' );
 		$title = $parser->getTitle();
 
 		$named_parameters = [
@@ -186,9 +186,10 @@ class CIForms {
 				unset( $body[$key] );
 			}
 		}
+		$paging = ( count( $subsections ) && !empty( $named_parameters['paging'] ) && $named_parameters['paging'] !== 'false' );
 		$output = '';
-		$url = Title::newFromText( 'Special:CIFormsSubmit' )->getLocalURL();
 
+		$url = SpecialPage::getTitleFor( 'CIFormsSubmit' )->getLocalURL();
 		// https://www.accessibility-developer-guide.com/examples/forms/required/
 		$output .= '<svg style="display:none" id="definition" version="1.1" xmlns="http://www.w3.org/2000/svg"><defs><symbol id="required" viewbox="0 0 128 128"><g><path d="M110.1,16.4L75.8,56.8l0.3,1l50.6-10.2v32.2l-50.9-8.9l-0.3,1l34.7,39.1l-28.3,16.5L63.7,78.2L63,78.5   l-18.5,49L17.2,111l34.1-39.8v-0.6l-50,9.2V47.6l49.3,9.9l0.3-0.6L17.2,16.7L45.5,0.5l17.8,48.7H64L82.1,0.5L110.1,16.4z"></path></g></symbol></defs></svg>';
 
@@ -212,7 +213,7 @@ class CIForms {
 			$output .= self::ci_form_section_process( $title, $body );
 		}
 		if ( count( $subsections ) ) {
-			if ( !empty( $named_parameters['paging'] ) && $named_parameters['paging'] !== 'false' ) {
+			if ( $paging ) {
 				// we cannot set the visibility in the section's container
 				// itself, because the nested parser function is rendered
 				// independently before the container
@@ -253,7 +254,7 @@ class CIForms {
 		}
 		$output .= self::hidden_input( 'form_pagename', $title->getText() );
 		$output .= self::hidden_input( 'form_pageid', $title->getArticleID() );
-		if ( empty( $named_parameters['paging'] ) || $named_parameters['paging'] === 'false' ) {
+		if ( !$paging ) {
 			$output .= '<input class="ci_form_input_submit" type="submit" value="' . ( !empty( $named_parameters['submit text'] ) ? htmlspecialchars( $named_parameters['submit text'] ) : wfMessage( 'ci-forms-submit' )->text() ) . '">';
 		} else {
 			$output .= '<div style="text-align:right">';
@@ -340,7 +341,6 @@ class CIForms {
 	 */
 	protected static function replace_wikitext_and_html( $title, $value ) {
 		$context = new RequestContext();
-
 		// see below, parseAsContent requires a title
 		// which is not set when executed offline
 		$context->setTitle( $title );
@@ -387,7 +387,8 @@ class CIForms {
 			'list type' => 'none',
 			// 'unordered', 'letters', 'numbers' + standard values
 			'max answers' => 1,
-			'min answers' => null,	// number or percent, for multiple choice questions if max answers > 1, default 1/2 +1
+			// number or percent, for multiple choice questions if max answers > 1, default 1/2 +1
+			'min answers' => null,
 			'suggestions' => null,
 			'css class' => '',
 			// if multiple choice
@@ -452,76 +453,171 @@ class CIForms {
 		}
 		$output .= self::hidden_input( $unique_id . '_section_type', $named_parameters['type'] );
 		$output .= self::hidden_input( $unique_id . '_section_title', $named_parameters['title'] );
-		if ( !empty( $named_parameters['title'] ) ) {
-			$output .= '<div class="ci_form_section_title">' . $named_parameters['title'] . '</div>';
-		}
+
+		// do some "look-ahead" processing
 		switch ( $named_parameters['type'] ) {
 			case 'inputs':
 			case 'inputs responsive':
-				$n = 0;
+				$parsed = [];
+				$placeholders = 0;
+				$labels = 0;
 				foreach ( $body as $value ) {
-					$output .= '<div class="ci_form_section_inputs_row">';
-					$output .= self::hidden_input( $unique_id . '_items_' . $n . '_label', $value );
+					// parsing error, nested square brackets
+					// @todo, add different error-cases
+					if ( preg_match( '/\[ [^\[\]]* \[ /x', $value ) ) {
+						$parsed[] = null;
+						continue;
+					}
+
+					$main_label = null;
 					if ( $named_parameters['type'] == 'inputs responsive' ) {
 						preg_match( "/^\s*([^\[\]]+)\s*(.+)\s*$/", $value, $match );
 						if ( $match ) {
 							$value = $match[2];
+							$main_label = trim( $match[1] );
+						}
+					}
+
+					$inputs = [];
+					$has_required = false;
+					$has_labels = false;
+					preg_match_all( '/([^\[\]]*)\[\s*([^\[\]]*)\s*\]\s*(\*)?/', $value, $matches, PREG_SET_ORDER );
+
+					foreach ( $matches as $match ) {
+						$label = trim( $match[1] );
+						$required = !empty( $match[3] );
+						list( $input_type, $placeholder, $input_options ) =
+							self::ci_form_parse_input_symbol( $match[2] ) + [ null, "", null ];
+
+						$inputs[] = [
+							'required' => $required,
+							'label' => $label,
+							'input_type' => $input_type,
+							'placeholder' => $placeholder,
+							'input_options' => $input_options
+						];
+
+						if ( !empty( $placeholder ) ) {
+							$placeholders++;
+						}
+						if ( !empty( $label ) ) {
+							$labels++;
+							$has_labels = true;
+						}
+
+						if ( $required ) {
+							$has_required = true;
+						}
+					}
+
+					$parsed[] = [
+						'main_label' => $main_label,
+						'value' => $value,
+						'inputs' => $inputs,
+						'has_required' => $has_required,
+						'has_labels' => $has_labels,
+					];
+				}
+
+				$required_html = '<span class="ci_form_required_symbol" aria-hidden="true">&nbsp;*</span>';
+
+				// add required asterisk here if the section
+				// has only one field and label and placeholder are empty
+				$required_rendered = false;
+				if ( !empty( $named_parameters['title'] ) ) {
+					$output .= '<div class="ci_form_section_title">' . $named_parameters['title'];
+
+					if ( count( $body ) === 1 && $parsed[0] && $parsed[0]['has_required'] && $placeholders === 0 && $labels === 0 ) {
+						$required_rendered = true;
+						$output .= $required_html;
+					}
+
+					$output .= '</div>';
+				}
+
+				break;
+			default:
+				if ( !empty( $named_parameters['title'] ) ) {
+					$output .= '<div class="ci_form_section_title">' . $named_parameters['title'] . '</div>';
+				}
+		}
+
+		switch ( $named_parameters['type'] ) {
+			case 'inputs':
+			case 'inputs responsive':
+				foreach ( $body as $key => $value ) {
+					// @phan-suppress-next-line PhanTypeArraySuspiciousNullable
+					if ( $parsed[$key] === null ) {
+						$output .= '<div class="ci_form_section_inputs_row_error">';
+						$output .= wfMessage( 'ci-forms-parsing-error' )->text();
+						$output .= '</div>';
+						continue;
+					}
+					$parsed_row = $parsed[$key];
+
+					$output .= '<div class="ci_form_section_inputs_row">';
+					$output .= self::hidden_input( $unique_id . '_items_' . $key . '_label', $value );
+
+					if ( $named_parameters['type'] == 'inputs responsive' ) {
+						if ( $parsed_row['main_label'] ) {
 							$output .= '<div class="ci_form_section_inputs_col-25">';
-							$output .= trim( $match[1] );
+							$output .= $parsed_row['main_label'];
 						} else {
 							$output .= '<div class="ci_form_section_inputs_col">';
 						}
-					}
-					preg_match_all( '/([^\[\]]*)\[\s*([^\[\]]*)\s*\]\s*(\*)?/', $value, $match_all );
 
-					if ( $named_parameters['type'] == 'inputs responsive' ) {
-						if ( count( $match_all[3] ) == 1 && !empty( $match_all[3][0] ) ) {
-							$output .= '<span class="ci_form_required_symbol" aria-hidden="true">&nbsp;*</span>';
+						if ( $parsed_row['has_required'] ) {
+							$output .= $required_html;
 						}
 						$output .= '</div><div class="ci_form_section_inputs_col-75">';
 					}
 
-					$inputs_per_row = count( $match_all[0] );
-					$label_exists = !empty( implode( '', $match_all[1] ) );
+					$inputs_per_row = count( $parsed_row['inputs'] );
 					$i = 0;
 					$output .= preg_replace_callback( '/([^\[\]]*)\[\s*([^\[\]]*)\s*\]\s*(\*)?/',
-						function ( $matches ) use ( $named_parameters, &$i, $n, $unique_id, $inputs_per_row, $label_exists ) {
+						static function ( $matches ) use ( $named_parameters, &$i, $key, $parsed_row, $unique_id, $inputs_per_row, $placeholders, $labels, $required_html, $required_rendered ) {
+							// @phan-suppress-next-line PhanTypeArraySuspiciousNullable
+							$input = $parsed_row['inputs'][$i];
 							$replacement = '';
 							$replacement .= '<div class="ci_form_section_inputs_inner_col" style="float:left;width:' . ( 100 / $inputs_per_row ) . '%">';
-							list( $input_type, $placeholder, $input_options ) =
-								self::ci_form_parse_input_symbol( $matches[2] ) + [ null, "", null ];
-							$required =
-								( !empty( $matches[3] ) ? ' data-required="1"' : '' );
 
-							$label = null;
+							$required = ( $input['required'] ? ' data-required="1"' : '' );
+							$label = $input['label'];
+							$placeholder = $input['placeholder'];
+
 							if ( $named_parameters['type'] != 'inputs responsive' ) {
-								$label = trim( $matches[1] );
-								if ( !empty( $label ) ) {
-									$replacement .= '<label>' . $label . ( $required ? '<span class="ci_form_required_symbol" aria-hidden="true">&nbsp;*</span>' : '' ) . '</label>';
-								} elseif ( $label_exists ) {
+								if ( empty( $label ) && $input['required'] && $labels > $placeholders && !$required_rendered ) {
+									$required_rendered = true;
+									$replacement .= '<label>(' . wfMessage( 'ci-forms-field-required' )->text() . $required_html . ')</label>';
+								} elseif ( !empty( $label ) ) {
+								// if ( !empty( $label ) ) {
+									$replacement .= '<label>' . $label . ( $required ? $required_html : '' ) . '</label>';
+								} elseif ( $parsed_row['has_labels'] ) {
 									// Zero-width space
 									$replacement .= '<label>&#8203;</label>';
 								}
 							}
 
 							if ( $named_parameters['type'] != 'inputs responsive' || $inputs_per_row > 1 ) {
-								if ( empty( $label ) && $required ) {
-									// @phan-suppress-next-line PhanRedundantCondition
-									$placeholder .= ( !empty( $placeholder ) ? ' ' : '' ) . '*';
+								if ( empty( $label ) && $input['required'] && !$required_rendered ) {
+									$placeholder .= ( !empty( $placeholder ) ? '' : wfMessage( 'ci-forms-field-required' )->text() ) . ' *';
 								}
 							}
+
+							$input_type = $input['input_type'];
+							$input_options = $input['input_options'];
 
 							$replacement .= '<div class="ci_form_section_inputs_inner_col_input_container" style="width:' . ( $named_parameters['type'] == 'inputs' || $inputs_per_row > 1 ? '100%' : 'auto' ) . '">';
 							switch ( $input_type ) {
 								case 'textarea':
 									// '_value' is appended for easy validation
 									$replacement .= '<textarea rows="4" name="' . $unique_id .
-										'_items_' . $n . '_input_' . $i . '_value"' .
+										'_items_' . $key . '_input_' . $i . '_value"' .
 										( $input_options && is_numeric( $input_options ) ? ' maxlength="' . $input_options . '"' : '' ) .
 										( !empty( $placeholder ) ? ' placeholder="' .
 											htmlspecialchars( $placeholder ) . '"' : '' ) .
 										$required . '></textarea>' .
-										( $input_options && is_numeric( $input_options ) ? '<span class="ci_form_section_inputs_textarea_maxlength">0/' . $input_options . ' characters</span>' : '' );
+										( $input_options && is_numeric( $input_options ) ? '<span class="ci_form_section_inputs_textarea_maxlength">0/' . $input_options . ' ' . wfMessage( 'ci-forms-textarea-maxlength-characters' )->text() . '</span>' : '' );
 									break;
 								case 'select':
 									// *** this could be replaced with any symbol
@@ -531,7 +627,7 @@ class CIForms {
 									$id_tmp = uniqid();
 									$select_options = str_replace( '\\,', $id_tmp, $input_options );
 									$select_options = preg_split( "/\s*,\s*/", $select_options, -1, PREG_SPLIT_NO_EMPTY );
-									$replacement .= '<select name="' . $unique_id . '_items_' . $n .
+									$replacement .= '<select name="' . $unique_id . '_items_' . $key .
 										'_input_' . $i . '_value" type="' . $input_type . '"' .
 										$required . '>';
 									if ( !empty( $placeholder ) ) {
@@ -557,7 +653,7 @@ class CIForms {
 								case 'text':
 								case 'email':
 									// '_value' is appended for easy validation
-									$replacement .= '<input name="' . $unique_id . '_items_' . $n .
+									$replacement .= '<input name="' . $unique_id . '_items_' . $key .
 										'_input_' . $i . '_value" type="' . $input_type . '"' .
 										( $placeholder ? ' placeholder="' .
 											htmlspecialchars( $placeholder ) . '"' : '' ) .
@@ -577,7 +673,6 @@ class CIForms {
 						$output .= '</div>';
 					}
 					$output .= '</div>';
-					$n++;
 				}
 				break;
 			case 'multiple choice':

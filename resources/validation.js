@@ -72,14 +72,7 @@ $( document ).ready( function () {
 			.find(
 				( paging && paging !== 'false' ?
 					'.ci_form_section_display_' + currentSection[ index ] + ' ' :
-					'' ) + 'input[data-required="1"]'
-			)
-			.prop( 'required', true );
-		$( this )
-			.find(
-				( paging && paging !== 'false' ?
-					'.ci_form_section_display_' + currentSection[ index ] + ' ' :
-					'' ) + 'select[data-required="1"]'
+					'' ) + ':input[data-required="1"]'
 			)
 			.prop( 'required', true );
 		$( this ).data( 'form-index', index );
@@ -241,15 +234,7 @@ $( document ).ready( function () {
 			.find(
 				'.ci_form_section_display_' +
 					currentSection[ index ] +
-					' input[data-required="1"]'
-			)
-			.removeAttr( 'required' );
-
-		$( form_el )
-			.find(
-				'.ci_form_section_display_' +
-					currentSection[ index ] +
-					' select[data-required="1"]'
+					' :input[data-required="1"]'
 			)
 			.removeAttr( 'required' );
 
@@ -387,12 +372,7 @@ $( document ).ready( function () {
 
 				$( this )
 					.find( '.ci_form_section_display_' + current_section )
-					.find( 'input[data-required="1"]' )
-					.prop( 'required', true );
-
-				$( this )
-					.find( '.ci_form_section_display_' + current_section )
-					.find( 'select[data-required="1"]' )
+					.find( ':input[data-required="1"]' )
 					.prop( 'required', true );
 
 			}

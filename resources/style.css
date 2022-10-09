@@ -1,3 +1,5 @@
+/* stylelint-disable color-named */
+
 *:has( [ class*='ci_form' ] ) {
 	box-sizing: border-box;
 }
@@ -326,4 +328,10 @@ ol.ci_form_section_cloze_test_list li.ci_form_section_cloze_test_list_question_e
 	width: 0.5em;
 	height: 0.5em;
 	fill: #363535;
+}
+
+.ci_form_section_inputs_row_error {
+	border: 1px solid red;
+	padding: 8px;
+	background: white;
 }

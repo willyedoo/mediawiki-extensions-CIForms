@@ -1,7 +1,7 @@
 {
 	"name": "CIForms",
 	"author": "thomas-topway-it",
-	"version": "1.3.0",
+	"version": "1.3.1",
 	"url": "https://www.mediawiki.org/wiki/Extension:CIForms",
 	"descriptionmsg": "ci-forms-extension-description",
 	"license-name": "GPL-2.0-or-later",
@@ -18,16 +18,20 @@
 	"AutoloadClasses": {
 		"CIForms": "includes/CIForms.php",
 		"CIFormsSubmit": "includes/specials/CIFormsSubmit.php",
-		"CIFormsManage": "includes/specials/CIFormsManage.php"
+		"CIFormsManage": "includes/specials/CIFormsManage.php",
+		"CIFormsApiCheckLatestVersion": "includes/api/CIFormsApiCheckLatestVersion.php"
 	},
 	"ExtensionMessagesFiles": {
 		"CIFormsAlias": "CIForms.alias.php",
 		"CIFormsMagic": "CIForms.i18n.php"
 	},
+	"APIModules": {
+		"ciforms-check-latest-version": "CIFormsApiCheckLatestVersion"
+	},
 	"Hooks": {
 		"LoadExtensionSchemaUpdates": "CIForms::onLoadExtensionSchemaUpdates",
 		"ParserFirstCallInit": "CIForms::onParserFirstCallInit",
-		"BeforePageDisplay": "CIForms::onBeforePageDisplay"
+		"OutputPageParserOutput": "CIForms::onOutputPageParserOutput"
 	},
 	"ResourceFileModulePaths": {
 		"localBasePath": "resources",
@@ -48,6 +52,30 @@
 			],
 			"styles": [
 				"style.css"
+			],
+			"targets": [
+				"desktop",
+				"mobile"
+			]
+		},
+		"ext.CIForms.manage": {
+			"scripts": [
+				"manage.js"
+			],
+			"dependencies": [
+				"oojs-ui.styles.icons-layout",
+				"oojs-ui-core",
+				"oojs-ui-widgets",
+				"mediawiki.cookie"
+			],
+			"styles": [
+				"style-manage.css"
+			],
+			"messages": [
+				"ci-forms-manage-pager-button-export",
+				"ci-forms-manage-pager-button-export-csv",
+				"ci-forms-manage-pager-button-export-excel",
+				"ciforms-jsmodule-pageproperties-outdated-version"
 			],
 			"targets": [
 				"desktop",
