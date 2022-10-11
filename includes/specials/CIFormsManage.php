@@ -966,15 +966,14 @@ AND title = ' . $dbr->addQuotes( $this->form_title )
 				case 'inputs':
 				case 'inputs responsive':
 					foreach ( $section['items'] as $value ) {
-
+						$label = $value['label'];
 						$main_label = "";
 						if ( $section['type'] == 'inputs responsive' ) {
 							preg_match( "/^\s*([^\[\]]+)\s*(.+)\s*$/", $value['label'], $match );
-							$main_label = $match[1];
-							$label = $match[2];
-
-						} else {
-							$label = $value['label'];
+							if ( count( $match ) === 2 ) {
+								$main_label = $match[1];
+								$label = $match[2];
+							}
 						}
 						$i = 0;
 
@@ -984,7 +983,6 @@ AND title = ' . $dbr->addQuotes( $this->form_title )
 							'/([^\[\]]*)\[([^\[\]]*)\]\s*(\*)?/',
 							static function ( $matches ) use ( &$i, $value, &$array, $html, $main_label, $section, $heading ) {
 								$label = $matches[1];
-
 								list( $input_type, $placeholder, $input_options ) = CIForms::ci_form_parse_input_symbol( $matches[2] ) + [ null, null, null ];
 
 								// @phan-suppress-next-line PhanSuspiciousValueComparison
@@ -994,7 +992,7 @@ AND title = ' . $dbr->addQuotes( $this->form_title )
 
 								$fallbackLabel = self::fallbackNonEmpty( [ $label, $placeholder, $main_label, $input_type ], $heading );
 
-								$array[] = [ $fallbackLabel, ( $value['inputs'] ? $value['inputs'][$i] : "" ) ];
+								$array[] = [ $fallbackLabel, ( $value['inputs'][$i] ?? "" ) ];
 								$i++;
 							},
 							$label
