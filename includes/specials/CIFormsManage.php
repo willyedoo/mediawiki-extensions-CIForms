@@ -873,7 +873,7 @@ AND title = ' . $dbr->addQuotes( $this->form_title )
 						$formatted = $this->entry;
 						break;
 					case 'username':
-						$formatted = $result['username'];
+						$formatted = ( !empty( $result['username'] ) ? $result['username'] : null );
 						break;
 					case 'submission_date':
 						$formatted = htmlspecialchars(
