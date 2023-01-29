@@ -272,7 +272,6 @@ class CIForms {
 		$output .= '</div>';
 		$output .= '</form>';
 		return [
-			// @phan-suppress-next-line SecurityCheck-XSS
 			$output,
 			'noparse' => true,
 			'isHTML' => true

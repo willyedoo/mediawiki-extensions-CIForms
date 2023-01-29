@@ -606,7 +606,7 @@ class CIFormsManage extends QueryPage {
 				$sql = $dbr->limitResult( $sql, $limit, $offset );
 			}
 
-			// phpcs:ignore MediaWiki.Usage.DbrQueryUsage.DbrQueryFound, @phan-suppress-next-line SecurityCheck-SQLInjection
+			// phpcs:ignore MediaWiki.Usage.DbrQueryUsage.DbrQueryFound
 			$res = $dbr->query( $sql, $fname );
 		}
 
