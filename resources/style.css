@@ -41,7 +41,7 @@
 	margin-bottom: 16px;
 }
 
-.ci_form_section_inputs_row:after {
+.ci_form_section_inputs_row::after {
 	content: '';
 	display: table;
 	clear: both;
@@ -77,8 +77,8 @@
 	width: 100%;
 }
 
-.ci_form_section_cloze_test_list_question .input:after,
-.ci_form_section_multiple_choice_list .input:after {
+.ci_form_section_cloze_test_list_question .input::after,
+.ci_form_section_multiple_choice_list .input::after {
 	content: '\00A0';
 }
 
@@ -127,8 +127,8 @@
 	margin-bottom: 2px;
 }
 
-.ci_form_section.inputs_responsive .input:after,
-.ci_form_section_inputs_row .input:after {
+.ci_form_section.inputs_responsive .input::after,
+.ci_form_section_inputs_row .input::after {
 	content: '\00A0';
 }
 
