@@ -65,7 +65,7 @@ class CIFormsSubmit extends SpecialPage {
 			$senderEmail = null;
 		}
 		if ( CIForms::isCaptchaEnabled() ) {
-			list( $result, $message, $captcha_message ) =
+			[ $result, $message, $captcha_message ] =
 				$this->check_captcha( $post ) + [ null, null, null ];
 			// @phan-suppress-next-line PhanSuspiciousValueComparison
 			if ( $result === false ) {
@@ -224,7 +224,7 @@ class CIFormsSubmit extends SpecialPage {
 		$types = [
 			'wgCIFormsSubmissionGroups' => 'array',	// legacy
 			'wgCIFormsDataAccess' => 'array',
-			'wgCIFormsSubmitEmail' => 'array',	// legacy
+			'wgCIFormsSubmitEmail' => 'array', // legacy
 			'wgCIFormsEmailTo' => 'array',
 			'wgCIFormsSuccessMessage' => 'string',
 			'wgCIFormsErrorMessage' => 'string',
@@ -447,7 +447,7 @@ class CIFormsSubmit extends SpecialPage {
 		$exclude = [ 'form', 'g-recaptcha-response', 'radio-for-required-checkboxes' ];
 		foreach ( $post as $i => $value ) {
 			$value = trim( $value );
-			list( $section, $a, $b, $c, $d ) =
+			[ $section, $a, $b, $c, $d ] =
 				// @phan-suppress-next-line PhanSuspiciousBinaryAddLists
 				explode( '_', $i ) + [ null, null, null, null, null ];
 			// this could be the "radio_for_required_checkboxes"
@@ -552,7 +552,7 @@ class CIFormsSubmit extends SpecialPage {
 							static function ( $matches ) use ( $section, $value, &$i, $inputs_per_row, $label_exists ) {
 								$replacement = '';
 								$replacement .= '<div class="ci_form_section_inputs_inner_col" style="float:left;width:' . ( 100 / $inputs_per_row ) . '%">';
-								list( $input_type, $placeholder, $input_options ) =
+								[ $input_type, $placeholder, $input_options ] =
 									CIForms::ci_form_parse_input_symbol( $matches[2] ) + [ null, null, null ];
 								$required =
 									( !empty( $matches[3] ) ? ' data-required="1" required' : '' );
@@ -630,7 +630,7 @@ class CIFormsSubmit extends SpecialPage {
 							static function ( $matches ) use ( &$i, $value, $section, $example ) {
 									$a = $b = null;
 								if ( !empty( $matches[1] ) ) {
-									list( $a, $b ) = preg_split( "/\s*=\s*/", $matches[1] ) + [ null, null ];
+									[ $a, $b ] = preg_split( "/\s*=\s*/", $matches[1] ) + [ null, null ];
 								}
 								$replacement_inner = '';
 								if ( $a || $b ) {

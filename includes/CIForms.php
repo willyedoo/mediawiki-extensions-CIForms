@@ -94,7 +94,7 @@ class CIForms {
 				[ 'stylesheet', $wgResourceBasePath . '/extensions/CIForms/resources/style.css' ],
 			];
 			foreach ( $items as $key => $val ) {
-				list( $type, $url ) = $val;
+				[ $type, $url ] = $val;
 				switch ( $type ) {
 					case 'stylesheet':
 						$item = '<link rel="stylesheet" href="' . $url . '" />';
@@ -156,16 +156,16 @@ class CIForms {
 		$title = $parser->getTitle();
 
 		$named_parameters = [
-			'submit' => null,	// legacy
+			'submit' => null, // legacy
 			'email to' => null,
 			'title' => null,
-			'submission groups' => null,	// legacy
+			'submission groups' => null, // legacy
 			'data access' => null,
 			'success message' => null,
 			'error message' => null,
 			'success page' => null,
 			'error page' => null,
-			'paging' => null,	// true, or 1,1,1,1,1, or 2,2,1
+			'paging' => null, // true, or 1,1,1,1,1, or 2,2,1
 			'submit text' => null,
 			'navigation next' => null,
 			'navigation back' => null,
@@ -314,7 +314,7 @@ class CIForms {
 						return $unique_id;
 					}, $value );
 			if ( strpos( $value_, '=' ) !== false ) {
-				list( $parameter_key, $parameter_value ) = explode( '=', $value_, 2 );
+				[ $parameter_key, $parameter_value ] = explode( '=', $value_, 2 );
 				$parameter_key = trim( str_replace( [ '_', '-' ], ' ', $parameter_key ) );
 				if ( array_key_exists( $parameter_key, $named_parameters ) ) {
 					$parameter_value =
@@ -485,7 +485,7 @@ class CIForms {
 					foreach ( $matches as $match ) {
 						$label = trim( $match[1] );
 						$required = !empty( $match[3] );
-						list( $input_type, $placeholder, $input_options ) =
+						[ $input_type, $placeholder, $input_options ] =
 							self::ci_form_parse_input_symbol( $match[2] ) + [ null, "", null ];
 
 						$inputs[] = [
@@ -643,7 +643,7 @@ class CIForms {
 											if ( strpos( $val, ':' ) === false ) {
 												return '<option>' . $val . '</option>';
 											}
-											list( $value, $label ) = preg_split( "/\s*:\s*/", $val, -1, PREG_SPLIT_NO_EMPTY );
+											[ $value, $label ] = preg_split( "/\s*:\s*/", $val, -1, PREG_SPLIT_NO_EMPTY );
 											return '<option value="' . htmlspecialchars( $value ) . '">' . $label . '</option>';
 										}, $select_options ) );
 									$replacement .= '</select>';
@@ -736,7 +736,7 @@ class CIForms {
 								// suggestions: "to be, to do, to make"
 								// example answer in past perfect
 								// I [to be=was] proud to win ...
-								list( $a, $b ) = preg_split( "/\s*=\s*/", $matches[1][$i], -1, PREG_SPLIT_NO_EMPTY ) + [ null, null ];
+								[ $a, $b ] = preg_split( "/\s*=\s*/", $matches[1][$i], -1, PREG_SPLIT_NO_EMPTY ) + [ null, null ];
 							}
 							$found_suggestion = preg_grep( '/^' . preg_quote( $a ) . '$/i', $suggestions );
 							if ( count( $found_suggestion ) ) {
@@ -770,7 +770,7 @@ class CIForms {
 				$output .= '<' . ( !$list_type_ordered ? 'ul' : 'ol' ) . ' class="ci_form_section_cloze_test_list" style="--list_style_type:' . $list_style . '">';
 				$n = 0;
 				foreach ( $items as $value ) {
-					list( $label, $example, $inputs ) = $value;
+					[ $label, $example, $inputs ] = $value;
 					$output .= '<li class="ci_form_section_cloze_test_list_question' .
 						( $example ? '_example' : '' ) . '">';
 					$output .= self::hidden_input( $unique_id .	'_items_' . $n . '_label', ( $example ? '* ' : '' ) . $label );
@@ -778,7 +778,7 @@ class CIForms {
 					$label =
 						preg_replace_callback( '/\[([^\[\]]*)\]/',
 							static function ( $matches ) use ( &$i, &$inputs, $example, $n, $unique_id ) {
-								list( $a, $b ) = array_shift( $inputs );
+								[ $a, $b ] = array_shift( $inputs );
 								$replacement = '';
 								if ( $a || $b ) {
 									$replacement .= '<span class="ci_form_section_cloze_test_list_question_answered">' .
@@ -834,7 +834,7 @@ class CIForms {
 		// [textarea=500]
 		// [enter=textarea=500]
 		// [enter text=textarea=500]
-		list( $a, $b, $c ) = preg_split( "/\s*=\s*/", $value, -1, PREG_SPLIT_NO_EMPTY ) + [ "", null, null ];
+		[ $a, $b, $c ] = preg_split( "/\s*=\s*/", $value, -1, PREG_SPLIT_NO_EMPTY ) + [ "", null, null ];
 		if ( $b && $c ) {
 			return [ $b, $a, $c ];
 		}

@@ -122,7 +122,7 @@ class CIFormsManage extends QueryPage {
 		$out->setSyndicated( $this->isSyndicated() );
 
 		if ( $this->limit == 0 && $this->offset == 0 ) {
-			list( $this->limit, $this->offset ) = $this->getLimitOffset();
+			[ $this->limit, $this->offset ] = $this->getLimitOffset();
 		}
 		$dbLimit = $this->getDBLimit( $this->limit, $this->offset );
 
@@ -655,7 +655,7 @@ FROM `' . $this->escapedDBprefix . 'CIForms_submissions' . '`
 FROM `' . $this->escapedDBprefix . 'CIForms_submissions' . '`
 WHERE page_id = ' . $dbr->addQuotes( $this->page_id ) . '
 AND title = ' . $dbr->addQuotes( $this->form_title )
-. ( $this->isSysop() ? '' : ' AND ' . $this->permissionsCond( true ) );
+			. ( $this->isSysop() ? '' : ' AND ' . $this->permissionsCond( true ) );
 		}
 
 		return $this->sqlReplace( $sql, true );
@@ -983,7 +983,7 @@ AND title = ' . $dbr->addQuotes( $this->form_title )
 							'/([^\[\]]*)\[([^\[\]]*)\]\s*(\*)?/',
 							static function ( $matches ) use ( &$i, $value, &$array, $html, $main_label, $section, $heading ) {
 								$label = $matches[1];
-								list( $input_type, $placeholder, $input_options ) = CIForms::ci_form_parse_input_symbol( $matches[2] ) + [ null, null, null ];
+								[ $input_type, $placeholder, $input_options ] = CIForms::ci_form_parse_input_symbol( $matches[2] ) + [ null, null, null ];
 
 								// @phan-suppress-next-line PhanSuspiciousValueComparison
 								if ( $input_type === 'text' ) {
