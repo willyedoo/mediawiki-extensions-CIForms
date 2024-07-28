@@ -31,6 +31,7 @@
 	"ci-forms-recaptcha-negative-score": "An error message. Parameters:\n* $1 - Email to which message should be sent in case of need to contact",
 
 	"ciformsmanage": "Title of special page for managing submissions of forms",
+	"ciformsmanage-title": "Title of special page for managing submissions of forms with par",
 	"specialpages-group-ciforms": "{{doc-specialgroup}}",
 	"ci-forms-manage-no-rows": "A label message",
 	"ci-forms-manage-pager-header-page": "A label message",

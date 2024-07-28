@@ -17,8 +17,8 @@
  *
  * @file
  * @ingroup extensions
- * @author thomas-topway-it <thomas.topway.it@mail.com>
- * @copyright Copyright ©2021-2022, https://wikisphere.org
+ * @author thomas-topway-it <support@topway.it>
+ * @copyright Copyright ©2021-2024, https://wikisphere.org
  */
 
 include_once __DIR__ . '/PrevNextNavigationRendererCIForms.php';
@@ -50,11 +50,23 @@ class CIFormsManage extends QueryPage {
 	}
 
 	/**
-	 * @return string
+	 * @return string|Message
 	 */
 	public function getDescription() {
-		// phpcs:ignore MediaWiki.Usage.SuperGlobalsUsage.SuperGlobals
-		return $this->msg( strtolower( $this->mName ) )->text() . ( !empty( $_GET['form_title'] ) ? ' (' . strip_tags( $_GET['form_title'] ) . ')' : '' );
+		$request = $this->getRequest();
+		$form_title = $request->getVal( 'form_title' );
+
+		if ( empty( $form_title ) ) {
+			$ret = $this->msg( strtolower( $this->mName ) );
+		} else {
+			$ret = $this->msg( strtolower( $this->mName ) . '-title', $form_title );
+		}
+
+		if ( version_compare( MW_VERSION, '1.41', '<' ) ) {
+			return $ret->text();
+		}
+
+		return $ret;
 	}
 
 	/**
@@ -82,7 +94,7 @@ class CIFormsManage extends QueryPage {
 
 		global $wgDBprefix;
 
-		$dbr = wfGetDB( DB_REPLICA );
+		$dbr = CIForms::getDB( DB_REPLICA );
 		$this->dbType = $dbr->getType();
 		$this->escapedDBprefix = ( $wgDBprefix ? preg_replace( '/[^A-Za-z0-9_ ]+/', '', $wgDBprefix ) : '' );
 
@@ -244,7 +256,7 @@ class CIFormsManage extends QueryPage {
 	 * @return string
 	 */
 	private function sqlReplace( $sql, $raw = false ) {
-		$dbr = wfGetDB( DB_REPLICA );
+		$dbr = CIForms::getDB( DB_REPLICA );
 
 		if ( $this->dbType == 'postgres' ) {
 			$sql = str_replace( 'CIForms_', 'ciforms_', $sql );
@@ -265,7 +277,7 @@ class CIFormsManage extends QueryPage {
 	 * @return string
 	 */
 	private function permissionsCond( $raw ) {
-		$dbr = wfGetDB( DB_REPLICA );
+		$dbr = CIForms::getDB( DB_REPLICA );
 
 		$userGroups = $this->userGroups;
 		$userGroups[] = $this->getUser()->getName();
@@ -285,7 +297,7 @@ class CIFormsManage extends QueryPage {
 	 * @param string $submission_id
 	 */
 	private function downloadPdf( $submission_id ) {
-		$dbr = wfGetDB( DB_REPLICA );
+		$dbr = CIForms::getDB( DB_REPLICA );
 		$conds = [ 'id' => $submission_id ];
 
 		if ( !$this->isSysop() ) {
@@ -330,7 +342,7 @@ class CIFormsManage extends QueryPage {
 	 * @param string $format
 	 */
 	private function export( $submission_id, $format ) {
-		$dbr = wfGetDB( DB_REPLICA );
+		$dbr = CIForms::getDB( DB_REPLICA );
 		$conds = [ 'id' => $submission_id ];
 
 		if ( !$this->isSysop() ) {
@@ -457,14 +469,22 @@ class CIFormsManage extends QueryPage {
 		// @phan-suppress-next-line PhanUndeclaredClassMethod
 		$sheet = $spreadsheet->getActiveSheet();
 
+		$setCellValue = static function ( $columnIndex, $row, $value ) use( $sheet ) {
+			if ( method_exists( $sheet, 'setCellValueByColumnAndRow' ) ) {
+				$sheet->setCellValueByColumnAndRow( $columnIndex, $row, $value );
+			} else {
+				$sheet->setCellValue( [ $columnIndex, $row ], $value );
+			}
+		};
+
 		foreach ( $headers as $key => $value ) {
 			// $columnIndex, $row, $value
-			$sheet->setCellValueByColumnAndRow( $key + 1, 1, $value );
+			$setCellValue( $key + 1, 1, $value );
 		}
 
 		foreach ( $data as $key => $value ) {
 			foreach ( $value as $k => $v ) {
-				$sheet->setCellValueByColumnAndRow( $k + 1, ( $key + 1 + 1 ), $v );
+				$setCellValue( $k + 1, ( $key + 1 + 1 ), $v );
 			}
 		}
 
@@ -619,7 +639,7 @@ class CIFormsManage extends QueryPage {
 	 * @return FakeResultWrapper
 	 */
 	protected function mockupResults( $res, $export = false ) {
-		$dbr = wfGetDB( DB_MASTER );
+		$dbr = CIForms::getDB( DB_MASTER );
 		$valid_results = [];
 		foreach ( $res as $key => $row ) {
 			if ( !empty( $row->data ) ) {
@@ -640,7 +660,7 @@ class CIFormsManage extends QueryPage {
 	 * @return string
 	 */
 	protected function getSQL() {
-		$dbr = wfGetDB( DB_REPLICA );
+		$dbr = CIForms::getDB( DB_REPLICA );
 
 		if ( empty( $this->form_title ) ) {
 			$sql = 'SELECT MAX(id) AS id, page_id, title, MAX(created_at) AS last_submission_date, COUNT(*) AS submissions,
@@ -696,7 +716,7 @@ AND title = ' . $dbr->addQuotes( $this->form_title )
 			// that the wanted data structure is reflected
 			// by the latest (possible) edit of a form
 
-			$dbr = wfGetDB( DB_REPLICA );
+			$dbr = CIForms::getDB( DB_REPLICA );
 			$conds = [ 'page_id' => $this->page_id, 'title' => $this->form_title ];
 
 			if ( !$this->isSysop() ) {
@@ -743,12 +763,12 @@ AND title = ' . $dbr->addQuotes( $this->form_title )
 	}
 
 	/**
-	 * @param OutputPage $out OutputPage to print to
-	 * @param Skin $skin User skin to use
-	 * @param IDatabase $dbr Database (read) connection to use
-	 * @param IResultWrapper $res Result pointer
-	 * @param int $num Number of available result rows
-	 * @param int $offset Paging offset
+	 * @param OutputPage $out
+	 * @param Skin $skin
+	 * @param IDatabase|Wikimedia\Rdbms\IReadableDatabase $dbr
+	 * @param IResultWrapper $res
+	 * @param int $num
+	 * @param int $offset
 	 */
 	protected function outputResults( $out, $skin, $dbr, $res, $num, $offset ) {
 		if ( $num > 0 ) {

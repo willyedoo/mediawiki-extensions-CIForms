@@ -33,6 +33,7 @@
 	"ci-forms-recaptcha-negative-score": "Negative score.",
 	"ci-forms-try-again-message": "Please try again or contact <span class=\"ci_text_highlight\">$1</span> to receive support",
 	"ciformsmanage": "Submissions",
+	"ciformsmanage-title": "Submissions ($1)",
 	"specialpages-group-ciforms": "CI Forms",
 	"ci-forms-manage-no-rows": "No submissions",
 	"ci-forms-manage-pager-header-page": "page",

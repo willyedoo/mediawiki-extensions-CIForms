@@ -17,8 +17,8 @@
  *
  * @file
  * @ingroup extensions
- * @author thomas-topway-it <thomas.topway.it@mail.com>
- * @copyright Copyright © 2021-2022, https://wikisphere.org
+ * @author thomas-topway-it <support@topway.it>
+ * @copyright Copyright © 2021-2024, https://wikisphere.org
  */
 use Dompdf\Dompdf;
 use PHPMailer\PHPMailer\PHPMailer;
@@ -44,6 +44,7 @@ class CIFormsSubmit extends SpecialPage {
 		$this->setHeaders();
 		$this->outputHeader();
 		$out = $this->getOutput();
+		$user = $this->getUser();
 		// $out->addModuleStyles( 'ext.CIForms.validation' );
 		// phpcs:ignore MediaWiki.Usage.SuperGlobalsUsage.SuperGlobals
 		$post = $_POST;
@@ -79,7 +80,7 @@ class CIFormsSubmit extends SpecialPage {
 		if ( empty( $form_result['form_values'] ) ) {
 			return $this->exit( $out, "no submission data", null, null );
 		}
-		$dbr = wfGetDB( DB_REPLICA );
+		$dbr = \CIForms::getDB( DB_REPLICA );
 		$this->dbType = $dbr->getType();
 		$row_inserted = $this->storeSubmission( $form_result, $username );
 		$formSubmit = self::mergeGlobal( 'email-to', $form_result['form_values'], $isLocal );
@@ -105,31 +106,69 @@ class CIFormsSubmit extends SpecialPage {
 		);
 		$message_body .= "<br /><br /><br />" . $this->msg( 'ci-forms-credits' );
 		$attachment = $this->createPDF( $form_result, $username, date( 'Y-m-d H:i:s' ) );
+		$from = ( !empty( $senderName ) ? $senderName . ' <' . $senderEmail . '>' : $senderEmail );
+		$filename = $this->msg( 'ci-forms-email-subject', $form_result['form_values']['title'], $wgSitename );
+
+		$result_success = $this->sendEmail( $from, $submit_valid, $subject, $message_body, $filename, $attachment );
+
+		// @see https://www.mediawiki.org/wiki/Topic:Xdy6mfzzqpx4lsu3
+		if ( $user->getEmail() ) {
+			$this->sendEmail( $from, [ $user->getEmail() ], $subject, $message_body, $filename, $attachment );
+		}
+
+		$this->exit( $out, $this->exit_message( $form_result, $row_inserted, true, $result_success, $success ), $form_result['form_values'], $success );
+	}
+
+	/**
+	 * @param string $from
+	 * @param array $to
+	 * @param string $subject
+	 * @param string $message_body
+	 * @param string $filename
+	 * @param string $attachment
+	 * @return bool
+	 */
+	private function sendEmail( $from, $to, $subject, $message_body, $filename, $attachment ) {
 		// https://github.com/PHPMailer/PHPMailer/blob/master/examples/sendmail.phps
 		// Create a new PHPMailer instance
 		$mail = new PHPMailer( true );
+
 		try {
-			$mail->isSendmail();
+			if ( $GLOBALS['wgCIFormsMailer'] === 'sendmail' ) {
+				$mail->isSendmail();
+
+			} else {
+				$mail->isSMTP();
+				$mail->Host = $GLOBALS['wgCIFormsSMTPHost'];
+				$mail->SMTPAuth = true;
+				$mail->Username = $GLOBALS['wgCIFormsSMTPUsername'];
+				$mail->Password = $GLOBALS['wgCIFormsSMTPPassword'];
+				$mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS;
+				$mail->Port = $GLOBALS['wgCIFormsSMTPPort'];
+			}
+
 			$mail->IsHTML( true );
+
+			// @see https://www.mediawiki.org/w/index.php?title=Topic:Xm1ys3dm8ijlegyb&topic_showPostId=xm1ys3dm8mhnmkwj#flow-post-xm1ys3dm8mhnmkwj
 			$mail->CharSet = "text/html; charset=UTF-8;";
-			$mail->setFrom( ( !empty( $senderName ) ? $senderName . ' <' . $senderEmail . '>' : $senderEmail ) );
-			foreach ( $submit_valid as $key => $email ) {
+
+			$mail->setFrom( $from );
+			foreach ( $to as $email ) {
 				$mail->addAddress( $email );
 			}
 			$mail->Subject = $subject;
 			$mail->msgHTML( $message_body );
 			// $mail->addAttachment($attachment);
-			$filename = $this->msg( 'ci-forms-email-subject', $form_result['form_values']['title'], $wgSitename );
+
 			$mail->AddStringAttachment( $attachment, $filename . '.pdf', "base64", "application/pdf" );
 			$mail->send();
-			$result_success = empty( $mail->ErrorInfo );
+			return empty( $mail->ErrorInfo );
 		} catch ( Exception $e ) {
 			// echo $e->getMessage();
 			// echo $e->errorMessage();
 			// echo "Mailer Error: " . $mail->ErrorInfo;
-			$result_success = false;
+			return false;
 		}
-		$this->exit( $out, $this->exit_message( $form_result, $row_inserted, true, $result_success, $success ), $form_result['form_values'], $success );
 	}
 
 	/**
@@ -147,7 +186,7 @@ class CIFormsSubmit extends SpecialPage {
 			'data' => json_encode( $form_result ),
 			'created_at' => date( 'Y-m-d H:i:s' )
 		];
-		$dbr = wfGetDB( DB_MASTER );
+		$dbr = \CIForms::getDB( DB_MASTER );
 		if ( !$dbr->tableExists( 'CIForms_submissions' ) ) {
 			return false;
 		}
@@ -207,7 +246,7 @@ class CIFormsSubmit extends SpecialPage {
 	 * @return string
 	 */
 	private function sqlReplace( $sql, $raw = false ) {
-		$dbr = wfGetDB( DB_REPLICA );
+		$dbr = \CIForms::getDB( DB_REPLICA );
 		if ( $this->dbType == 'postgres' ) {
 			$sql = str_replace( 'CIForms_', 'ciforms_', $sql );
 		}
@@ -323,6 +362,10 @@ class CIFormsSubmit extends SpecialPage {
 		$form_output_html .= '<meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>';
 		// $form_output_html .= '<link rel="stylesheet" type="text/css" href="' . $css_url . '" />';
 		$form_output_html .= '<style>';
+
+		// @see https://www.mediawiki.org/w/index.php?title=Topic:Xuq3bozk9r5h72sp&topic_showPostId=xuq3bozk9v3jf6qx#flow-post-xuq3bozk9v3jf6qx
+		$form_output_html .= '* { font-family: DejaVu Sans, sans-serif; }';
+
 		$stylesheet = file_get_contents( $css_path );
 		// ***ensure there aren't spaces between brackets otherwise
 		// Dompdf will not work
@@ -594,7 +637,7 @@ class CIFormsSubmit extends SpecialPage {
 						$ii = -1;
 						$output .= '<li>';
 						// @see https://stackoverflow.com/questions/35200674/special-character-not-showing-in-html2pdf
-						$output .= '<span style="font-family:DejaVu Sans">' .
+						$output .= '<span style="font-family:DejaVu Sans, sans-serif">' .
 							( $value['selected'] ? '&#9745;' : '&#9744;' ) . '</span>&nbsp;';
 						$label =
 							preg_replace_callback( '/\[([^\[\]]*)\]\s*\*?/',

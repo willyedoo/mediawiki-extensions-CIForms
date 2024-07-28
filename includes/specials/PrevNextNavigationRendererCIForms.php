@@ -17,11 +17,11 @@
  *
  * @file
  * @ingroup extensions
- * @author thomas-topway-it <thomas.topway.it@mail.com>
- * @copyright Copyright ©2021-2022, https://wikisphere.org
+ * @author thomas-topway-it <support@topway.it>
+ * @copyright Copyright ©2021-2024, https://wikisphere.org
  */
 
-class PrevNextNavigationRendererCIForms extends MediaWiki\Navigation\PrevNextNavigationRenderer {
+class PrevNextNavigationRendererCIForms {
 
 	/** @var array */
 	private $additional_query_parameters;
@@ -37,7 +37,7 @@ class PrevNextNavigationRendererCIForms extends MediaWiki\Navigation\PrevNextNav
 	 */
 	public function __construct( MessageLocalizer $messageLocalizer, $additional_query_parameters ) {
 		// ***edited
-		parent::__construct( $messageLocalizer );
+		// parent::__construct( $messageLocalizer );
 		$this->messageLocalizer = $messageLocalizer;
 		$this->additional_query_parameters = $additional_query_parameters;
 	}

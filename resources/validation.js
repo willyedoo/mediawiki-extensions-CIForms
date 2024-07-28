@@ -15,14 +15,14 @@
  * along with CIForms.  If not, see <http://www.gnu.org/licenses/>.
  *
  * @file
- * @author thomas-topway-it <thomas.topway.it@mail.com>
- * @copyright Copyright © 2021-2022, https://wikisphere.org
+ * @author thomas-topway-it <support@topway.it>
+ * @copyright Copyright © 2021-2024, https://wikisphere.org
  */
 
-$( document ).ready( function () {
+$( function () {
 	var msg1 = mw.config.get( 'ci-forms-validation-msg1' );
 	var msg2 = mw.config.get( 'ci-forms-validation-msg2' );
-	var msg3 = mw.config.get( 'ci-forms-validation-msg3' );
+	// var msg3 = mw.config.get( 'ci-forms-validation-msg3' );
 
 	var currentSection = {};
 
@@ -37,25 +37,36 @@ $( document ).ready( function () {
 
 	var site_key = mw.config.get( 'ci_forms_google_recaptcha_site_key' );
 
-	mw.loader
-		.getScript( 'https://www.google.com/recaptcha/api.js?render=' + site_key )
-		.then(
-			function () {
-				if ( $( 'input[name="g-recaptcha-response"]' ).length ) {
-					grecaptcha.ready( function () {
-						grecaptcha
-							.execute( site_key, { action: 'validate_captcha' } )
-							.then( function ( token ) {
-								$( 'input[name="g-recaptcha-response"]' ).val( token );
-							} )
-							.catch( function ( error ) {} );
-					} );
+	// @see https://www.mediawiki.org/wiki/Topic:Y2pfh94nkkqzsjw3
+	function executeRecaptchaValidation() {
+		mw.loader
+			.getScript( 'https://www.google.com/recaptcha/api.js?render=' + site_key )
+			.then(
+				function () {
+					if ( $( 'input[name="g-recaptcha-response"]' ).length ) {
+						grecaptcha.ready( function () {
+							grecaptcha
+								.execute( site_key, { action: 'validate_captcha' } )
+								.then( function ( token ) {
+									$( 'input[name="g-recaptcha-response"]' ).val( token );
+								} )
+								.catch( function ( error ) {
+									// eslint-disable-next-line no-console
+									console.log( error );
+								} );
+						} );
+					}
+				},
+				function ( e ) {
+					mw.log.error( e.message );
 				}
-			},
-			function ( e ) {
-				mw.log.error( e.message );
-			}
-		);
+			);
+	}
+
+	executeRecaptchaValidation();
+
+	// refresh each 90 seconds
+	setInterval( executeRecaptchaValidation, 90 * 1000 );
 
 	$( '.ci_form' ).each( function ( index ) {
 		var paging = $( this )
@@ -78,6 +89,7 @@ $( document ).ready( function () {
 		$( this ).data( 'form-index', index );
 	} );
 
+	// eslint-disable-next-line no-unused-vars
 	$( '.ci_form li' ).each( function ( index ) {
 		var el = this;
 		var section_el = $( this ).closest( '.ci_form_section' );
@@ -94,6 +106,7 @@ $( document ).ready( function () {
 				var count = $( section_el ).find( 'input[type=checkbox]:checked' ).length;
 
 				if ( count > max_answers ) {
+					// eslint-disable-next-line no-alert
 					alert( msg1.replace( '$1', max_answers ) );
 					return false;
 				}
@@ -114,6 +127,7 @@ $( document ).ready( function () {
 				var count = $( section_el ).find( 'input[type=checkbox]:checked' ).length;
 
 				if ( count > max_answers ) {
+					// eslint-disable-next-line no-alert
 					alert( msg1.replace( '$1', max_answers ) );
 					return false;
 				}
@@ -122,7 +136,7 @@ $( document ).ready( function () {
 	} );
 
 	// https://stackoverflow.com/questions/15031513/jquery-help-to-enforce-maxlength-on-textarea
-	$( '.ci_form textarea[maxlength]' ).keyup( function () {
+	$( '.ci_form textarea[maxlength]' ).on( 'keyup', function () {
 		var limit = parseInt( $( this ).attr( 'maxlength' ) );
 		var text = $( this ).val();
 		var chars = text.length;
@@ -202,7 +216,8 @@ $( document ).ready( function () {
 			} );
 	} );
 
-	$( '.ci_form_section_submit button' ).click( function ( evt ) {
+	// eslint-disable-next-line no-unused-vars
+	$( '.ci_form_section_submit button' ).on( 'click', function ( evt ) {
 		var form_el = $( this ).closest( '.ci_form' );
 
 		var next = $( this ).prop( 'class' ).indexOf( 'next' ) !== -1;
@@ -239,6 +254,7 @@ $( document ).ready( function () {
 			.removeAttr( 'required' );
 
 		currentSection[ index ] = current_section;
+
 		$( form_el )
 			.find( '.ci_form_section_display_' + current_section )
 			.first()
@@ -257,7 +273,7 @@ $( document ).ready( function () {
 			.css( 'display', current_section === count ? 'inline-block' : 'none' );
 	} );
 
-	$( '.ci_form' ).submit( function ( evt ) {
+	$( '.ci_form' ).on( 'submit', function ( evt ) {
 		var form_el = $( this );
 
 		form_el.get( 0 ).scrollIntoView();
@@ -272,8 +288,7 @@ $( document ).ready( function () {
 		if ( paging && paging !== 'false' ) {
 			index = form_el.data( 'form-index' );
 			current_section = currentSection[ index ] + 1;
-			count =
-				$( form_el ).find( "[class^='ci_form_section_display_']" ).length - 1;
+			count = $( form_el ).find( "[class^='ci_form_section_display_']" ).length - 1;
 
 			// $(form_el).find(".ci_form_section").length - 1;
 		}
@@ -319,6 +334,7 @@ $( document ).ready( function () {
 						var minNumber = min_answers || Math.floor( inputs / 2 ) + 1;
 
 						if ( filledIn < minNumber ) {
+							// eslint-disable-next-line no-alert
 							alert(
 								msg2
 									.replace( '$1', minNumber )
@@ -336,6 +352,7 @@ $( document ).ready( function () {
 								'input[type=checkbox][name$=_selected]:checked'
 							).length;
 							if ( checked < min_answers ) {
+								// eslint-disable-next-line no-alert
 								alert(
 									msg2
 										.replace( '$1', min_answers )
@@ -374,7 +391,6 @@ $( document ).ready( function () {
 					.find( '.ci_form_section_display_' + current_section )
 					.find( ':input[data-required="1"]' )
 					.prop( 'required', true );
-
 			}
 
 			$( form_el )

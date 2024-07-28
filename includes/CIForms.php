@@ -17,9 +17,12 @@
  *
  * @file
  * @ingroup extensions
- * @author thomas-topway-it <thomas.topway.it@mail.com>
- * @copyright Copyright © 2021-2022, https://wikisphere.org
+ * @author thomas-topway-it <support@topway.it>
+ * @copyright Copyright © 2021-2024, https://wikisphere.org
  */
+
+use MediaWiki\MediaWikiServices;
+
 class CIForms {
 	/** @var array */
 	public static $ordered_styles = [
@@ -52,6 +55,19 @@ class CIForms {
 	}
 
 	/**
+	 * @param Title &$title
+	 * @param null $unused
+	 * @param OutputPage $output
+	 * @param User $user
+	 * @param WebRequest $request
+	 * @param MediaWiki|MediaWiki\Actions\ActionEntryPoint $mediaWiki
+	 * @return void
+	 */
+	public static function onBeforeInitialize( &$title, $unused, $output, $user, $request, $mediaWiki ) {
+		self::initExtension();
+	}
+
+	/**
 	 * Register any render callbacks with the parser
 	 *
 	 * @param Parser $parser
@@ -75,9 +91,12 @@ class CIForms {
 
 		$title = $outputPage->getTitle();
 		$categories = $title->getParentCategories();
+		$funcName = version_compare( MW_VERSION, '1.38', '<' ) ? 'getFlag' : 'getOutputFlag';
 
-		if ( $parserOutput->getFlag( 'ciform' )
+		if ( $parserOutput->getExtensionData( 'ciform' ) !== null
 			// back-compatibility
+			// @phan-suppress-next-line PhanUndeclaredMethod -- *** false positive ?
+			|| $parserOutput->$funcName( 'ciform' )
 			|| array_key_exists( 'Category:Pages_with_forms', $categories ) ) {
 
 			global $wgCIFormsGoogleRecaptchaSiteKey;
@@ -152,7 +171,8 @@ class CIForms {
 	 * @return array
 	 */
 	public static function ci_form( Parser $parser, ...$argv ) {
-		$parser->getOutput()->setFlag( 'ciform' );
+		$parserOutput = $parser->getOutput();
+		$parserOutput->setExtensionData( 'ciform', true );
 		$title = $parser->getTitle();
 
 		$named_parameters = [
@@ -857,7 +877,28 @@ class CIForms {
 	 */
 	public static function ci_form_section( Parser $parser, ...$argv ) {
 		$output = self::ci_form_section_process( $parser->getTitle(), $argv );
-		// @phan-suppress-next-line SecurityCheck-XSS
 		return [ $output, 'noparse' => true, 'isHTML' => true ];
 	}
+
+	/**
+	 * @param int $db
+	 * @return \Wikimedia\Rdbms\DBConnRef|\Wikimedia\Rdbms\IDatabase|\Wikimedia\Rdbms\IReadableDatabase
+	 */
+	public static function getDB( $db ) {
+		if ( !method_exists( MediaWikiServices::class, 'getConnectionProvider' ) ) {
+			// @see https://gerrit.wikimedia.org/r/c/mediawiki/extensions/PageEncryption/+/1038754/comment/4ccfc553_58a41db8/
+			return MediaWikiServices::getInstance()->getDBLoadBalancer()->getConnection( $db );
+		}
+		$connectionProvider = MediaWikiServices::getInstance()->getConnectionProvider();
+		switch ( $db ) {
+			case DB_PRIMARY:
+			// @phan-suppress-next-line PhanPluginDuplicateSwitchCase
+			case DB_MASTER:
+				return $connectionProvider->getPrimaryDatabase();
+			case DB_REPLICA:
+			default:
+				return $connectionProvider->getReplicaDatabase();
+		}
+	}
+
 }
