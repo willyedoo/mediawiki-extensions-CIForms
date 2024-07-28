@@ -154,6 +154,12 @@ class CIForms {
 				);
 			}
 		}
+
+		$updater->addExtensionField(
+			( $dbType === 'mysql' ? 'CIForms_submissions' : 'ciforms_submissions' ),
+			'username',
+			"$base/../$dbType/CIForms_submissions_username.sql"
+		);
 	}
 
 	/**
