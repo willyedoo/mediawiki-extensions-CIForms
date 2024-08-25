@@ -812,7 +812,7 @@ AND title = ' . $dbr->addQuotes( $this->form_title )
 	 * @return string[]
 	 */
 	public function getModuleStyles() {
-		return [ 'mediawiki.pager.tablePager', 'oojs-ui.styles.icons-movement', 'oojs-ui.styles.icons-layout' ];
+		return [ 'mediawiki.pager.styles', 'oojs-ui.styles.icons-movement', 'oojs-ui.styles.icons-layout' ];
 	}
 
 	/**
