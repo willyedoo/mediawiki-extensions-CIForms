@@ -898,8 +898,6 @@ class CIForms {
 		$connectionProvider = MediaWikiServices::getInstance()->getConnectionProvider();
 		switch ( $db ) {
 			case DB_PRIMARY:
-			// @phan-suppress-next-line PhanPluginDuplicateSwitchCase
-			case DB_MASTER:
 				return $connectionProvider->getPrimaryDatabase();
 			case DB_REPLICA:
 			default:

@@ -639,7 +639,7 @@ class CIFormsManage extends QueryPage {
 	 * @return FakeResultWrapper
 	 */
 	protected function mockupResults( $res, $export = false ) {
-		$dbr = CIForms::getDB( DB_MASTER );
+		$dbr = CIForms::getDB( DB_PRIMARY );
 		$valid_results = [];
 		foreach ( $res as $key => $row ) {
 			if ( !empty( $row->data ) ) {

@@ -186,7 +186,7 @@ class CIFormsSubmit extends SpecialPage {
 			'data' => json_encode( $form_result ),
 			'created_at' => date( 'Y-m-d H:i:s' )
 		];
-		$dbr = \CIForms::getDB( DB_MASTER );
+		$dbr = \CIForms::getDB( DB_PRIMARY );
 		if ( !$dbr->tableExists( 'CIForms_submissions' ) ) {
 			return false;
 		}
