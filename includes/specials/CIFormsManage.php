@@ -665,7 +665,7 @@ class CIFormsManage extends QueryPage {
 		if ( empty( $this->form_title ) ) {
 			$sql = 'SELECT MAX(id) AS id, page_id, title, MAX(created_at) AS last_submission_date, COUNT(*) AS submissions,
 SUM(CASE WHEN shown IS NULL THEN 1 ELSE 0 END) AS new
-FROM `' . $this->escapedDBprefix . 'CIForms_submissions' . '` 
+FROM `' . $this->escapedDBprefix . 'CIForms_submissions' . '`
 ' . ( $this->isSysop() ? '' : ' WHERE ' . $this->permissionsCond( true ) ) .
 'GROUP BY page_id, title
 ';
