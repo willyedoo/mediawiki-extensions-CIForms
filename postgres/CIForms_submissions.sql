@@ -15,3 +15,19 @@ CREATE TABLE IF NOT EXISTS ciforms_submissions (
 --
 -- Indexes for dumped tables
 --
+-- Add primary key
+ALTER TABLE ciforms_submissions
+  ADD PRIMARY KEY (id);
+
+-- Add new column
+ALTER TABLE ciforms_submissions
+  ADD COLUMN username VARCHAR(255) NULL;
+--
+-- AUTO_INCREMENT for dumped tables
+--
+
+--
+-- AUTO_INCREMENT for table `CIForms_submissions`
+--
+ALTER TABLE ciforms_submissions
+  ALTER COLUMN id SET DEFAULT nextval('ciforms_submissions_id_seq');
