@@ -8,7 +8,6 @@ CREATE TABLE IF NOT EXISTS CIForms_submissions_groups (
   usergroup VARCHAR(255) COLLATE "C" NOT NULL,
   created_at TIMESTAMP NOT NULL
 );
-
 --
 -- Indexes for dumped tables
 --
