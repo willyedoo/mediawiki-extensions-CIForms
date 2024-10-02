@@ -1,20 +1,14 @@
--- Table structure for table CIForms_submissions
+-- Table structure for table "CIForms_submissions"
 
-CREATE TABLE IF NOT EXISTS ciforms_submissions (
+CREATE TABLE IF NOT EXISTS CIForms_submissions (
   id SERIAL PRIMARY KEY,
-  page_id INT NOT NULL,
-  title VARCHAR(255) NOT NULL,
+  page_id INTEGER NOT NULL,
+  title VARCHAR(255) COLLATE "C" NOT NULL,
   data BYTEA NOT NULL,
   shown TIMESTAMP DEFAULT NULL,
-  created_at TIMESTAMP NOT NULL
+  created_at TIMESTAMP NOT NULL,
+  username VARCHAR(255) NULL
 );
 
--- Adding the username column
-DO $$
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
-                   WHERE table_name='ciforms_submissions' AND column_name='username') THEN
-        ALTER TABLE ciforms_submissions 
-        ADD COLUMN username VARCHAR(255) NULL;
-    END IF;
-END $$;
+-- Indexes for table "CIForms_submissions"
+-- (Primary key is already created with SERIAL type)
