@@ -1,13 +1,12 @@
 -- Table structure for table `CIForms_submissions`
-
-CREATE TABLE IF NOT EXISTS CIForms_submissions (
-  id SERIAL PRIMARY KEY,
-  page_id INTEGER NOT NULL,
-  title VARCHAR(255) NOT NULL,
-  data BYTEA NOT NULL,
-  shown TIMESTAMP DEFAULT NULL,
-  created_at TIMESTAMP NOT NULL,
-  username VARCHAR(255) NULL
+CREATE TABLE CIForms_submissions (
+    id SERIAL PRIMARY KEY,
+    page_id INT NOT NULL,
+    username VARCHAR(255),
+    title VARCHAR(255) NOT NULL,
+    data BYTEA NOT NULL,
+    shown TIMESTAMP,
+    created_at TIMESTAMP NOT NULL
 );
 
 -- Indexes for table `CIForms_submissions`
